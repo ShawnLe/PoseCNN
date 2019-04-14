@@ -1,5 +1,5 @@
 import _init_paths
-from datasets.factory_sub import get_imdb
+from datasets.factory import get_imdb
 from fcn.train import get_training_roidb
 from gt_data_layer.layer import GtDataLayer
 
