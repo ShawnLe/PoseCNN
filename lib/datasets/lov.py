@@ -139,9 +139,9 @@ class lov(datasets.imdb):
         """
         Return the default path where KITTI is expected to be installed.
         """
-        print '_get_default_path' + str(os.path.join(datasets.ROOT_DIR, 'data_syn_LOV'))
-        # return os.path.join(datasets.ROOT_DIR, 'data', 'LOV') # when runs train
-        return os.path.join(datasets.ROOT_DIR, 'data_syn_LOV') # when runs test
+        # print '_get_default_path' + str(os.path.join(datasets.ROOT_DIR, 'data_syn_LOV'))
+        return os.path.join(datasets.ROOT_DIR, 'data', 'LOV') # when runs train
+        # return os.path.join(datasets.ROOT_DIR, 'data_syn_LOV') # when runs test
 
 
     def _load_object_points(self):

@@ -219,8 +219,11 @@ def im_segment_single_frame(sess, net, im, im_depth, meta_data, voxelizer, exten
                 print ("labels_2d sum = {}", np.sum(labels_2d))
                 print 'poses_init.shape: ' + str(poses_init.shape)
                 print 'poses_init: ' + str(poses_init)
-                print poses_pred.shape
+                print 'poses_pred shape: ' + str(poses_pred.shape)
                 print 'poses_pred: ' + str(poses_pred)
+                for ii in xrange(0, poses_pred.shape[1]/4):
+                    qt = poses_pred[0, ii*4:ii*4+4]
+                    print 'estimate pose of class ' + str(ii) + ' is ' + str( quat2mat(qt) ) 
 
                 # combine poses
                 num = rois.shape[0]

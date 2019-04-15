@@ -441,7 +441,11 @@ def load_and_enqueue(sess, net, data_layer, coord, iter):
     while not coord.should_stop():
         print('[load_and_enqueue] iter {}'.format(iter))
 
-        blobs = data_layer.forward(iter)
+        if isinstance(data_layer, GtSynthesizeLayer):
+            blobs = data_layer.forward(iter)
+        elif isinstance(data_layer, GtDataLayer):
+            blobs = data_layer.forward()
+
         # iter += 1
 
                 
