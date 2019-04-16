@@ -137,7 +137,8 @@ def checkVisibility(width, height, P3d, p2d, depthmap):
         Z_depthmap = cv2.remap(depthmap, p2d_, None, cv2.INTER_LINEAR)
         # print 'sub-pixel = ' + str(Z_depthmap)
 
-        if Z_depthmap < P3d[2]:
+        #if Z_depthmap < P3d[2]:
+        if P3d[2] - Z_depthmap > .001 :
             vis = 1
         else:
             vis = 2
@@ -194,6 +195,11 @@ if __name__ == '__main__':
         print 'backgrounds loaded from {}'.format(cache_file)
 
     i = 0
+    points = imdb._points_all
+    num_kpt = 20
+    num_cls = points.shape[0]-1
+    selMdlPoints = selectModelPoints(num_cls, num_kpt, points[1:,:,:])  # not use the background
+
     while i < num_images:
 
         # render a synthetic image
@@ -278,10 +284,10 @@ if __name__ == '__main__':
 
         # sampling and project model points
         Y2_meta = []
-        points = imdb._points_all
-        num_kpt = 20
-        num_cls = points.shape[0]-1
-        selMdlPoints = selectModelPoints(num_cls, num_kpt, points[1:,:,:])  # not use the background
+        # points = imdb._points_all
+        # num_kpt = 20
+        # num_cls = points.shape[0]-1
+        # selMdlPoints = selectModelPoints(num_cls, num_kpt, points[1:,:,:])  # not use the background
 
         im_test = np.array(im, copy=True)
         for id in xrange(num_cls):
