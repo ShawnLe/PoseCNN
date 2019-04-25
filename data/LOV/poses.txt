@@ -1,3 +1,4 @@
 data/LOV/poses/002_master_chef_can.txt
 data/LOV/poses/003_cracker_box.txt
 data/LOV/poses/004_sugar_box.txt
+data/LOV/poses/006_mustard_bottle.txt

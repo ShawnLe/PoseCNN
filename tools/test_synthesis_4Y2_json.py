@@ -147,6 +147,16 @@ def checkVisibility(width, height, P3d, p2d, depthmap):
 
 if __name__ == '__main__':
 
+    import json
+
+    myfile = os.path.join(os.getcwd(), 'lib','synthesize_4Y2', 'syn_cfg.json')
+    print "Opening ", myfile
+
+    with open(myfile, 'r') as f:
+        def_cfg=json.load(f)
+
+    exit()
+
     args = parse_args()
     cfg.BACKGROUND = args.background_name
 
@@ -258,9 +268,8 @@ if __name__ == '__main__':
 
         # sample a background image
         rgba = im_syn
-        ind = np.random.randint(len(backgrounds), size=1)[0]
-        # filename = backgrounds[10]
-        filename = backgrounds[ind]
+        # ind = np.random.randint(len(backgrounds), size=1)[0]
+        filename = backgrounds[10]
         background = cv2.imread(filename, cv2.IMREAD_UNCHANGED)
         try:
             background = cv2.resize(background, (rgba.shape[1], rgba.shape[0]), interpolation=cv2.INTER_LINEAR)
