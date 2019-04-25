@@ -1,78 +1,16 @@
 {
-  "model_name":"linemod_train",
-
-  "network":"resnet18_8s",
-
-  "lr":1e-3,
-  "lr_decay_rate":0.5,
-  "lr_decay_epoch":20,
-  "train_batch_size":5,
-  "test_batch_size":1,
-  "motion_model":false,
-
-  "resume":false,
-  "finetune":false,
-  "epoch_num":200,
-
-  "use_real_train":true,
-  "use_multi_syn":false,
-  "use_fuse":false,
-  "use_plane":false,
-  "use_render_all":true,
-  "use_render_orig":false,
-  "use_render_occ":false,
-  "use_render_new":false,
-  "use_printer_set":false,
-
-  "loss_rec_step":80,
-  "img_rec_step":160,
-
-  "eval_epoch":false,
-  "eval_inter":5,
-  "eval_epoch_begin":80,
-
-  "vote_type":"Farthest",
-
-  "vertex_loss_ratio":1.0,
-
-  "aug_cfg":{
-    "mask":false,
-    "min_mask":0.1,
-    "max_mask":0.4,
-
-    "rotation":true,
-    "rot_ang_min":-30,
-    "rot_ang_max":30,
-
-    "crop":true,
-    "use_old":true,
-    "resize_ratio_min":0.8,
-    "resize_ratio_max":1.2,
-
-    "overlap_ratio":0.8,
-    "resize_hmin":20,
-    "resize_hmax":130,
-    "resize_wmin":20,
-    "resize_wmax":130,
-
-    "flip":false,
-
-    "blur":true,
-
-    "jitter":true,
-    "brightness":0.1,
-    "contrast":0.1,
-    "saturation":0.05,
-    "hue":0.05,
-
-    "wmax":640,
-    "wmin":256,
-    "hmax":480,
-    "hmin":256,
-    "size_int":8,
-
-    "ignore_fuse_ms_vertex":false,
-
-    "use_mask_out":false
-  }
+"num_images": 1000,
+"num_keypoints": 4,
+"sel_random_points": false,
+"random_background": false,
+"background_id": 10,
+"height": 480,
+"width": 640,
+"intrinsics": {"fx": 1066.778, "fy": 1067.487, "px": 312.9869, "py": 241.3109},
+"selectModelPoints": [
+        [-0.01067, -0.00971, -0.02873],
+        [-0.01369, -0.01025, 0.00428],
+        [0.03391, -0.00943, -0.02709],
+        [0.02146, -0.00911, 0.04536]
+      ]
 }

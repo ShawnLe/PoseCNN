@@ -153,9 +153,10 @@ if __name__ == '__main__':
     print "Opening ", myfile
 
     with open(myfile, 'r') as f:
-        def_cfg=json.load(f)
+        syn_cfg=json.load(f)
 
-    exit()
+    print (syn_cfg["intrinsics"]["fx"])
+    # exit()
 
     args = parse_args()
     cfg.BACKGROUND = args.background_name
@@ -164,22 +165,31 @@ if __name__ == '__main__':
     imdb = get_imdb(args.imdb_name)
 
     # num_images = 500
-    num_images = 2000
-    height = 480
-    width = 640
-    fx = 1066.778
-    fy = 1067.487
-    px = 312.9869
-    py = 241.3109
+    # num_images = 2000
+    # height = 480
+    # width = 640
+    # fx = 1066.778
+    # fy = 1067.487
+    # px = 312.9869
+    # py = 241.3109
+
+    num_images = syn_cfg["num_images"]
+    height = syn_cfg["height"]
+    width = syn_cfg["width"]
+    fx = syn_cfg["intrinsics"]["fx"]
+    fy = syn_cfg["intrinsics"]["fy"]
+    px = syn_cfg["intrinsics"]["px"]
+    py = syn_cfg["intrinsics"]["py"]
     zfar = 6.0
     znear = 0.25
     tnear = 0.5
     tfar = 2.0
-    num_classes = 22
+    num_classes = 1 # 22 
     factor_depth = 10000.0
     intrinsic_matrix = np.array([[fx, 0, px], [0, fy, py], [0, 0, 1]])
     # root = '/capri/YCB_Video_Dataset/data_syn/'
-    root = '/media/shawnle/Data0/YCB_Video_Dataset/YCB_Video_Dataset/data_syn_LOV/'
+    # root = '/media/shawnle/Data0/YCB_Video_Dataset/YCB_Video_Dataset/data_syn_LOV/'
+    root = '/home/shawnle/Documents/Projects/PoseCNN-master/data/LOV_syn/'
 
     if not os.path.exists(root):
         os.makedirs(root)
@@ -207,9 +217,29 @@ if __name__ == '__main__':
 
     i = 0
     points = imdb._points_all
-    num_kpt = 20
+    # num_kpt = 20
+    num_kpt = syn_cfg["num_keypoints"]
     num_cls = points.shape[0]-1
-    selMdlPoints = selectModelPoints(num_cls, num_kpt, points[1:,:,:])  # not use the background
+
+    if syn_cfg["sel_random_points"]:
+        selMdlPoints = selectModelPoints(num_cls, num_kpt, points[1:,:,:])  # not use the background
+    else:
+        selMdlPoints = syn_cfg["selectModelPoints"]
+
+        print (selMdlPoints)
+        print (np.array(selMdlPoints).shape)
+        shape = np.array(selMdlPoints).shape
+
+        assert (shape[1] == 3) #, "current shape[1] = {}", (shape[1])
+        assert (shape[0] == num_cls * num_kpt)
+
+        selMdlPoints = np.array(selMdlPoints)
+        selMdlPoints = np.transpose(selMdlPoints) #reshape((3, num_cls * num_kpt))
+        print (selMdlPoints)
+        print (selMdlPoints.shape)
+
+        # some assertion
+        # exit()
 
     while i < num_images:
 
@@ -268,8 +298,19 @@ if __name__ == '__main__':
 
         # sample a background image
         rgba = im_syn
-        # ind = np.random.randint(len(backgrounds), size=1)[0]
-        filename = backgrounds[10]
+
+        if syn_cfg["random_background"]:
+            
+            ind = np.random.randint(len(backgrounds), size=1)[0]
+            filename = backgrounds[ind]
+            print("background is %d named %s chosen" % (ind, filename))                        
+        else:
+            ind = syn_cfg["background_id"]
+            filename = backgrounds[ind]
+            print("background %d named %s is chosen" % (ind, filename))
+            
+            # filename = backgrounds[10]
+
         background = cv2.imread(filename, cv2.IMREAD_UNCHANGED)
         try:
             background = cv2.resize(background, (rgba.shape[1], rgba.shape[0]), interpolation=cv2.INTER_LINEAR)
