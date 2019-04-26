@@ -121,6 +121,11 @@ class vgg16convs_vertex_pred():
         self.the_model = Model(inputs=input, outputs=vertex_pred)
 
 
+def data_generator():
+
+    yield 
+
+
 
 if __name__ == "__main__":
     # execute only if run as a script
