@@ -3,3 +3,15 @@
 */*/*.o
 */*.pyc
 data/LOV/extents.txt
+data/LOV_syn/*
+*/*/build
+output/lov/*
+*/build/*
+*.bkp
+*.pyc
+vertex_pred_test
+data/demo_images
+*.swp
+*.png
+data/cache/*
+data/LOV/*
