@@ -1,7 +1,11 @@
+import glob
+import os
+
 from math import ceil
 import numpy as np
+from scipy.io import loadmat
 
-import tensorflow as tf
+import cv2
 
 from keras.layers import Input, Conv2D, MaxPooling2D, Conv2DTranspose, Add
 from keras.layers import Concatenate, Dropout, Dense
@@ -13,34 +17,9 @@ import keras.layers as KL
 import keras.engine as KE
 
 
-# tf padding is 'SAME' not 'same' as Keras
-DEFAULT_PADDING = 'SAME'
-
-tf.reset_default_graph()
-
-batch_sz = 50
-
-  
-def smooth_l1_loss_vertex(vertex_pred, vertex_targets, vertex_weights, sigma=1.0):
-    sigma_2 = sigma ** 2
-    vertex_diff = vertex_pred - vertex_targets
-    diff = tf.multiply(vertex_weights, vertex_diff)
-    abs_diff = tf.abs(diff)
-    smoothL1_sign = tf.stop_gradient(tf.to_float(tf.less(abs_diff, 1. / sigma_2)))
-    in_loss = tf.pow(diff, 2) * (sigma_2 / 2.) * smoothL1_sign \
-            + (abs_diff - (0.5 / sigma_2)) * (1. - smoothL1_sign)
-    loss = tf.div( tf.reduce_sum(in_loss), tf.reduce_sum(vertex_weights) + 1e-10 )
-    return loss
-
-def get_training_roidb(imdb):
-  """Returns a roidb (Region of Interest database) for use in training."""
-  if cfg.TRAIN.USE_FLIPPED:
-      print 'Appending horizontally-flipped training examples...'
-      imdb.append_flipped_images()
-      print 'done'
-
-  return imdb.roidb
-
+############################################################
+#  Network Class
+############################################################
 
 class vgg16convs_vertex_pred():
 
@@ -121,11 +100,47 @@ class vgg16convs_vertex_pred():
         self.the_model = Model(inputs=input, outputs=vertex_pred)
 
 
-def data_generator():
+############################################################
+#  Data Generator
+############################################################
 
-    yield 
+def prepare_dataset_indexes(data_path):
+    database = []
+    num_color = len(glob.glob(data_path + '/*-color.png'))
+    dat_size = num_color * 4
+    for i in range(dat_size):
+        data = {}
+        data['color'] = os.path.join(data_path, '{:06}-color.png'.format(i))
+        data['meta'] = os.path.join(data_path, '{:06}-meta.mat'.format(i))
+        database.append(data)
+
+    return database
 
 
+def data_generator(data_path=None, shuffle=True, batch_size=1):
+
+    b = 0
+    index = -1
+    dataset_indexes = prepare_dataset_indexes(data_path)
+
+    print len(dataset_indexes)
+    while True:
+        index = (index + 1) % len(dataset_indexes)
+        if shuffle and index == 0:
+            np.random.shuffle(dataset_indexes)
+
+        data_rec = dataset_indexes[index]
+
+        rgb = imread(data_rec["color"])
+        mat = loadmat(data_rec["meta"])
+
+        
+
+
+    
+############################################################
+#  Main
+############################################################
 
 if __name__ == "__main__":
     # execute only if run as a script
@@ -142,3 +157,6 @@ if __name__ == "__main__":
                 metrics=['accuracy'])
 
     mdw.the_model.summary()              
+
+    data_path = '/home/shawnle/Documents/Restore_PoseCNN/PoseCNN-master/data_syn_LOV/data_2_objs/'
+    dat_gen = data_generator(data_path)

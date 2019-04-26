@@ -32,6 +32,7 @@ class lov(datasets.imdb):
         # self._classes = ('__background__', '002_master_chef_can')
         # self._classes = ('__background__', '003_cracker_box')  
         self._classes = ('__background__', '002_master_chef_can', '003_cracker_box', '004_sugar_box', '006_mustard_bottle')
+        # self._classes = ('__background__', '004_sugar_box')
 
         # self._class_colors = [(255, 255, 255), (255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0), (255, 0, 255), (0, 255, 255), \
         #                       (128, 0, 0), (0, 128, 0), (0, 0, 128), (128, 128, 0), (128, 0, 128), (0, 128, 128), \

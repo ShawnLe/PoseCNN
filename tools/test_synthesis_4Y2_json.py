@@ -145,6 +145,65 @@ def checkVisibility(width, height, P3d, p2d, depthmap):
 
     return vis
 
+
+def load_object_extents(data_path, num_classes):
+
+    extent_file = os.path.join(data_path, 'LOV', 'extents.txt')
+    assert os.path.exists(extent_file), \
+            'Path does not exist: {}'.format(extent_file)
+
+    extents = np.zeros((num_classes, 3), dtype=np.float32)
+    # extents[1:, :] = np.loadtxt(extent_file)
+    extents = np.loadtxt(extent_file)
+
+    return extents
+
+def _get_bb3D(extent):
+    bb = np.zeros((3, 8), dtype=np.float32)
+
+    xHalf = extent[0] * 0.5
+    yHalf = extent[1] * 0.5
+    zHalf = extent[2] * 0.5
+
+    bb[:, 0] = [xHalf, yHalf, zHalf]
+    bb[:, 1] = [-xHalf, yHalf, zHalf]
+    bb[:, 2] = [xHalf, -yHalf, zHalf]
+    bb[:, 3] = [-xHalf, -yHalf, zHalf]
+    bb[:, 4] = [xHalf, yHalf, -zHalf]
+    bb[:, 5] = [-xHalf, yHalf, -zHalf]
+    bb[:, 6] = [xHalf, -yHalf, -zHalf]
+    bb[:, 7] = [-xHalf, -yHalf, -zHalf]
+
+    return bb
+
+def is_qualified(pose, extent, intrinsic_matrix, height, width):
+    """ check whether pose gives whole bounding-box inside FOV
+    """
+    # print(pose)
+    # print(extent)
+
+    bb3D = _get_bb3D(extent)
+    # print(bb3D)
+    RotationMatrix = pose[:,:3]
+    # print(RotationMatrix)
+    # print(RotationMatrix.shape)
+    TranslationMatrix = pose[:,3].reshape(3,1)
+    # print(TranslationMatrix)
+    # print(TranslationMatrix.shape)
+    coor2d = np.matmul(intrinsic_matrix, np.matmul(RotationMatrix, bb3D) + TranslationMatrix)
+    x_coor = coor2d[0] / coor2d[2]
+    y_coor = coor2d[1] / coor2d[2]
+    # print (x_coor)
+    # print (y_coor)
+    # print (len(x_coor))
+
+    for i in range(len(x_coor)):
+        if x_coor[i] < 0 or x_coor[i] >= width or y_coor[i] < 0 or y_coor[i] >= height:
+            return False
+
+    return True
+
+
 if __name__ == '__main__':
 
     import json
@@ -163,6 +222,11 @@ if __name__ == '__main__':
 
     print 'imdb_name = ' + args.imdb_name
     imdb = get_imdb(args.imdb_name)
+    print (imdb.num_classes)
+
+    extents = load_object_extents(os.path.join(os.getcwd(),'data'), imdb.num_classes-1)
+    print ("extents = %s" % (extents))
+    print ("extents shape = {}" .format(extents.shape))
 
     # num_images = 500
     # num_images = 2000
@@ -184,12 +248,12 @@ if __name__ == '__main__':
     znear = 0.25
     tnear = 0.5
     tfar = 2.0
-    num_classes = 1 # 22 
+    num_classes = imdb.num_classes -1
     factor_depth = 10000.0
     intrinsic_matrix = np.array([[fx, 0, px], [0, fy, py], [0, 0, 1]])
     # root = '/capri/YCB_Video_Dataset/data_syn/'
-    # root = '/media/shawnle/Data0/YCB_Video_Dataset/YCB_Video_Dataset/data_syn_LOV/'
-    root = '/home/shawnle/Documents/Projects/PoseCNN-master/data/LOV_syn/'
+    root = '/media/shawnle/Data0/YCB_Video_Dataset/YCB_Video_Dataset/data_syn_LOV/'
+    # root = '/home/shawnle/Documents/Projects/PoseCNN-master/data/LOV_syn/'
 
     if not os.path.exists(root):
         os.makedirs(root)
@@ -273,10 +337,21 @@ if __name__ == '__main__':
         index = np.where(class_indexes >= 0)[0]
         num = len(index)
         qt = np.zeros((3, 4, num), dtype=np.float32)
+
+        # whole set of poses, each has whole bounding-box inside FOV
+        set_is_qualified = True
         for j in xrange(num):
             ind = index[j]
             qt[:, :3, j] = quat2mat(poses[ind, :4])
             qt[:, 3, j] = poses[ind, 4:]
+
+            if syn_cfg["check_whole_bb"]:
+                if not is_qualified(qt[:,:,j], extents[j,:], intrinsic_matrix, height, width):
+                    set_is_qualified = False
+                    break
+
+        if not set_is_qualified:
+            continue
 
         flag = 1
         for j in xrange(num):
