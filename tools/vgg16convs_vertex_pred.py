@@ -107,7 +107,7 @@ class vgg16convs_vertex_pred():
 def prepare_dataset_indexes(data_path):
     database = []
     num_color = len(glob.glob(data_path + '/*-color.png'))
-    dat_size = num_color * 4
+    dat_size = num_color 
     for i in range(dat_size):
         data = {}
         data['color'] = os.path.join(data_path, '{:06}-color.png'.format(i))
@@ -131,10 +131,10 @@ def data_generator(data_path=None, shuffle=True, batch_size=1):
 
         data_rec = dataset_indexes[index]
 
-        rgb = imread(data_rec["color"])
+        rgb = cv2.imread(data_rec["color"])
         mat = loadmat(data_rec["meta"])
 
-        
+
 
 
     
