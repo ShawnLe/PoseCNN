@@ -10,6 +10,7 @@ import cv2
 from keras.layers import Input, Conv2D, MaxPooling2D, Conv2DTranspose, Add
 from keras.layers import Concatenate, Dropout, Dense
 from keras.models import Model
+from keras.models import load_model
 
 from keras import backend as K
 from keras.layers import Layer
@@ -92,8 +93,9 @@ class vgg16convs_vertex_pred():
             #   upscore_vertex = deconv(dropout_vertex, int(16*scale), int(16*scale), 128, int(8*scale), int(8*scale), name='upscore_vertex', trainable=False)
             upscore_vertex = KL.Conv2DTranspose(128, (int(16*scale), int(16*scale)), strides=(int(8*scale), int(8*scale)), name='upscore_vertex', padding='same', data_format="channels_last", trainable=False)(dropout_vertex)
             
-            # 3*num_classes -> a fixed output like this 
+            # 3*num_classes == depth == # channels-> a fixed output like this 
             vertex_pred = Conv2D(3*num_classes, (1,1), name='vertex_pred', padding='same', activation='relu')(upscore_vertex)
+            # vertex_pred = Conv2D(2*num_classes, (1,1), name='vertex_pred', padding='same', activation='relu')(upscore_vertex)
 
 
         # create keras model
@@ -104,6 +106,19 @@ class vgg16convs_vertex_pred():
 #  Data Generator
 ############################################################
 
+def pad_im(im, factor, value=0):
+    height = im.shape[0]
+    width = im.shape[1]
+
+    pad_height = int(np.ceil(height / float(factor)) * factor - height)
+    pad_width = int(np.ceil(width / float(factor)) * factor - width)
+
+    if len(im.shape) == 3:
+        return np.lib.pad(im, ((0, pad_height), (0, pad_width), (0,0)), 'constant', constant_values=value)
+    elif len(im.shape) == 2:
+        return np.lib.pad(im, ((0, pad_height), (0, pad_width)), 'constant', constant_values=value)
+
+
 def prepare_dataset_indexes(data_path):
     database = []
     num_color = len(glob.glob(data_path + '/*-color.png'))
@@ -112,30 +127,88 @@ def prepare_dataset_indexes(data_path):
         data = {}
         data['color'] = os.path.join(data_path, '{:06}-color.png'.format(i))
         data['meta'] = os.path.join(data_path, '{:06}-meta.mat'.format(i))
+        data['label'] = os.path.join(data_path, '{:06}-label.png'.format(i))
         database.append(data)
 
     return database
 
 
-def data_generator(data_path=None, shuffle=True, batch_size=1):
+def _vote_centers(im_label, cls_indexes, center, poses, num_classes):
+    """ 
+        ref. PoseCNN
+        compute the voting label image in 2D
+        im_label refers to num_class 0 as background
+    """
+
+    width = im_label.shape[1]
+    height = im_label.shape[0]
+    vertex_targets = np.zeros((height, width, 3*num_classes), dtype=np.float32)
+    vertex_weights = np.zeros(vertex_targets.shape, dtype=np.float32)
+
+    c = np.zeros((2, 1), dtype=np.float32)
+    for i in xrange(1, num_classes):
+        y, x = np.where(im_label == i)
+        if len(x) > 0:
+            ind = np.where(cls_indexes == i)[0] 
+            c[0] = center[ind, 0]
+            c[1] = center[ind, 1]
+            z = poses[2, 3, ind]
+            R = np.tile(c, (1, len(x))) - np.vstack((x, y))
+            # compute the norm
+            N = np.linalg.norm(R, axis=0) + 1e-10
+            # normalization
+            R = np.divide(R, np.tile(N, (2,1)))
+            # assignment
+            start = 3 * i
+            end = start + 3
+            vertex_targets[y, x, 3*i] = R[0,:]
+            vertex_targets[y, x, 3*i+1] = R[1,:]
+            vertex_targets[y, x, 3*i+2] = z
+            vertex_weights[y, x, start:end] = 10.0
+
+    return vertex_targets, vertex_weights
+
+
+def data_generator(data_path=None, shuffle=True, batch_size=1, num_classes=1):
 
     b = 0
     index = -1
     dataset_indexes = prepare_dataset_indexes(data_path)
 
-    print len(dataset_indexes)
+    # print len(dataset_indexes)
     while True:
+
+        if b == 0:
+            # init arrays
+            batch_rgb = np.zeros((batch_size, 480, 640, 3), dtype=np.float32)
+            batch_center = np.zeros((batch_size, 480, 640, num_classes * 3), dtype=np.float32)            
+
         index = (index + 1) % len(dataset_indexes)
         if shuffle and index == 0:
             np.random.shuffle(dataset_indexes)
 
         data_rec = dataset_indexes[index]
 
-        rgb = cv2.imread(data_rec["color"])
+        rgb_raw = pad_im(cv2.imread(data_rec["color"], cv2.IMREAD_UNCHANGED), 16)
+        rgb = rgb_raw.astype(np.float32, copy=True)
         mat = loadmat(data_rec["meta"])
+        im_lbl = pad_im(cv2.imread(data_rec['label'], cv2.IMREAD_UNCHANGED), 16)
 
+        batch_rgb[b,:,:,:] = rgb
 
+        center_targets, center_weights = _vote_centers(im_lbl, mat['cls_indexes'], mat['center'], mat['poses'], num_classes)
+        batch_center[b,:,:,:] = center_targets
 
+        b = b+1
+
+        if b >= batch_size:
+            inputs = [batch_rgb]
+            outputs = [batch_center]
+
+            b = 0
+
+            yield (inputs, outputs)
+        
 
     
 ############################################################
@@ -146,11 +219,11 @@ if __name__ == "__main__":
     # execute only if run as a script
     # main()
 
-    input = Input(shape=(480, 640, 3))
+    input = Input(shape=(480, 640, 3), dtype='float32')
     print(input.shape)
 
     mdw = vgg16convs_vertex_pred(input)
-    print(mdw.the_model.output_shape)
+    print('model output shape {}'.format(mdw.the_model.output_shape))
 
     mdw.the_model.compile(optimizer='rmsprop',
                 loss='categorical_crossentropy',
@@ -158,5 +231,38 @@ if __name__ == "__main__":
 
     mdw.the_model.summary()              
 
-    data_path = '/home/shawnle/Documents/Restore_PoseCNN/PoseCNN-master/data_syn_LOV/data_2_objs/'
-    dat_gen = data_generator(data_path)
+    num_classes = 3 # including the background as '0'
+
+    # data_path = '/home/shawnle/Documents/Restore_PoseCNN/PoseCNN-master/data_syn_LOV/data_2_objs/'
+    data_path = '/home/shawnle/Documents/Projects/PoseCNN-master/data/LOV/3d_train_data'
+    dat_gen = data_generator(data_path, num_classes=num_classes)
+
+    mode = 'INFERENCE'
+
+    if mode == 'TRAIN' :
+        batch_size = 5
+        num_samples = 2822
+        steps_per_epoch = ceil(num_samples / batch_size)
+        mdw.the_model.fit_generator(dat_gen, steps_per_epoch=steps_per_epoch, epochs=100, verbose=2)
+        mdw.the_model.save('my_model.h5')  # creates a HDF5 file 'my_model.h5'
+
+    if mode == 'INFERENCE':
+
+        test_model = load_model('my_model.h5')
+
+        num_test = 1
+        test_batch = np.zeros((num_test, 480, 640, 3), dtype=np.float32)
+
+        sample_ = pad_im(cv2.imread(os.path.join(data_path, '{:06}-color.png'.format(150)), cv2.IMREAD_UNCHANGED), 16)
+        sample = sample_.astype(np.float32, copy=True)
+
+        test_batch[0,:,:,:] = sample
+        pred = test_model.predict(test_batch)
+
+        print (pred.shape)
+        cv2.imwrite('vx0.png', pred[0,:,:,3])
+        cv2.imwrite('vy0.png', pred[0,:,:,4])
+        cv2.imwrite('Z0.png', pred[0,:,:,5])
+        cv2.imwrite('vx1.png', pred[0,:,:,6])
+        cv2.imwrite('vy1.png', pred[0,:,:,7])
+        cv2.imwrite('Z1.png', pred[0,:,:,8])
