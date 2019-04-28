@@ -7,6 +7,8 @@ from scipy.io import loadmat
 
 import cv2
 
+import keras
+
 from keras.layers import Input, Conv2D, MaxPooling2D, Conv2DTranspose, Add
 from keras.layers import Concatenate, Dropout, Dense
 from keras.models import Model
@@ -30,32 +32,41 @@ class vgg16convs_vertex_pred():
 
     def build(self, input):
 
-        # 1st block
-        conv1_1 = Conv2D(64, (3,3), name='conv1_1', padding='same', activation='relu')(input)
-        conv1_2 = Conv2D(64, (3,3), name='conv1_2', padding='same', activation='relu')(conv1_1)
-        pool1 = MaxPooling2D((2,2), strides=(2,2), name='pool1')(conv1_2)
+        # # 1st block
+        # conv1_1 = Conv2D(64, (3,3), name='conv1_1', padding='same', activation='relu')(input)
+        # conv1_2 = Conv2D(64, (3,3), name='conv1_2', padding='same', activation='relu')(conv1_1)
+        # pool1 = MaxPooling2D((2,2), strides=(2,2), name='pool1')(conv1_2)
 
-        # 2nd block
-        conv2_1 = Conv2D(128, (3,3), name='conv2_1', padding='same', activation='relu')(pool1)
-        conv2_2 = Conv2D(128, (3,3), name='conv2_2', padding='same', activation='relu')(conv2_1)
-        pool2 = MaxPooling2D((2,2), strides=(2,2), name='pool2')(conv2_2)
+        # # 2nd block
+        # conv2_1 = Conv2D(128, (3,3), name='conv2_1', padding='same', activation='relu')(pool1)
+        # conv2_2 = Conv2D(128, (3,3), name='conv2_2', padding='same', activation='relu')(conv2_1)
+        # pool2 = MaxPooling2D((2,2), strides=(2,2), name='pool2')(conv2_2)
 
-        # 3rd block
-        conv3_1 = Conv2D(256, (3,3), name='conv3_1', padding='same', activation='relu')(pool2)
-        conv3_2 = Conv2D(256, (3,3), name='conv3_2', padding='same', activation='relu')(conv3_1)
-        conv3_3 = Conv2D(256, (3,3), name='conv3_3', padding='same', activation='relu')(conv3_2)
-        pool3 = MaxPooling2D((2,2), strides=(2,2), name='pool3')(conv3_3)
+        # # 3rd block
+        # conv3_1 = Conv2D(256, (3,3), name='conv3_1', padding='same', activation='relu')(pool2)
+        # conv3_2 = Conv2D(256, (3,3), name='conv3_2', padding='same', activation='relu')(conv3_1)
+        # conv3_3 = Conv2D(256, (3,3), name='conv3_3', padding='same', activation='relu')(conv3_2)
+        # pool3 = MaxPooling2D((2,2), strides=(2,2), name='pool3')(conv3_3)
 
-        # 4th block
-        conv4_1 = Conv2D(512, (3,3), name='conv4_1', padding='same', activation='relu')(pool3)
-        conv4_2 = Conv2D(512, (3,3), name='conv4_2', padding='same', activation='relu')(conv4_1)
-        conv4_3 = Conv2D(512, (3,3), name='conv4_3', padding='same', activation='relu')(conv4_2)
-        pool4 = MaxPooling2D((2,2), strides=(2,2), name='pool4')(conv4_3)
+        # # 4th block
+        # conv4_1 = Conv2D(512, (3,3), name='conv4_1', padding='same', activation='relu')(pool3)
+        # conv4_2 = Conv2D(512, (3,3), name='conv4_2', padding='same', activation='relu')(conv4_1)
+        # conv4_3 = Conv2D(512, (3,3), name='conv4_3', padding='same', activation='relu')(conv4_2)
+        # pool4 = MaxPooling2D((2,2), strides=(2,2), name='pool4')(conv4_3)
 
-        # 5th block
-        conv5_1 = Conv2D(512, (3,3), name='conv5_1', padding='same', activation='relu')(pool4)
-        conv5_2 = Conv2D(512, (3,3), name='conv5_2', padding='same', activation='relu')(conv5_1)
-        conv5_3 = Conv2D(512, (3,3), name='conv5_3', padding='same', activation='relu')(conv5_2)
+        # # 5th block
+        # conv5_1 = Conv2D(512, (3,3), name='conv5_1', padding='same', activation='relu')(pool4)
+        # conv5_2 = Conv2D(512, (3,3), name='conv5_2', padding='same', activation='relu')(conv5_1)
+        # conv5_3 = Conv2D(512, (3,3), name='conv5_3', padding='same', activation='relu')(conv5_2)
+
+        vgg16 = keras.applications.vgg16.VGG16(include_top=False, weights='imagenet', input_tensor=input)
+
+        # until the last 2 layers, all are freezed for training
+        for layer in vgg16.layers:
+          layer.trainable = False
+
+        conv4_3 = vgg16.layers[-6].output
+        conv5_3 = vgg16.layers[-2].output # 2nd layer from the last, block5_conv3
 
         # vertex pred head
         num_units = 64
@@ -216,6 +227,7 @@ def data_generator(data_path=None, shuffle=True, batch_size=1, num_classes=1):
 ############################################################
 
 if __name__ == "__main__":
+
     # execute only if run as a script
     # main()
 
@@ -225,8 +237,11 @@ if __name__ == "__main__":
     mdw = vgg16convs_vertex_pred(input)
     print('model output shape {}'.format(mdw.the_model.output_shape))
 
-    mdw.the_model.compile(optimizer='rmsprop',
-                loss='categorical_crossentropy',
+    # rmsprop = keras.optimizers.RMSprop(lr=0.0001, rho=0.9, epsilon=None, decay=0.0)
+    sgd = keras.optimizers.SGD(lr=0.0001, momentum=0.9, decay=0.9)
+
+    mdw.the_model.compile(optimizer=sgd,
+                loss='mean_squared_error',
                 metrics=['accuracy'])
 
     mdw.the_model.summary()              
@@ -237,18 +252,32 @@ if __name__ == "__main__":
     data_path = '/home/shawnle/Documents/Projects/PoseCNN-master/data/LOV/3d_train_data'
     dat_gen = data_generator(data_path, num_classes=num_classes)
 
-    mode = 'INFERENCE'
+    # mode = 'INFERENCE'
+    mode = 'TRAIN'
 
     if mode == 'TRAIN' :
         batch_size = 5
         num_samples = 2822
         steps_per_epoch = ceil(num_samples / batch_size)
-        mdw.the_model.fit_generator(dat_gen, steps_per_epoch=steps_per_epoch, epochs=100, verbose=2)
+        mdw.the_model.fit_generator(dat_gen, steps_per_epoch=steps_per_epoch, epochs=200, verbose=2)
         mdw.the_model.save('my_model.h5')  # creates a HDF5 file 'my_model.h5'
 
     if mode == 'INFERENCE':
 
         test_model = load_model('my_model.h5')
+
+        print(test_model.get_weights())
+        print(type(test_model.get_weights()))
+        print(np.shape(test_model.get_weights()))
+        print(np.shape(test_model.get_weights()[0]))
+        print(test_model.get_weights()[0])
+        print(np.shape(test_model.get_weights()[0]))
+        print(type(test_model.get_weights()[0]))
+
+        for lr in test_model.layers:
+            print(lr.name)
+        
+        print(test_model.get_layer('score_conv4_vertex').get_weights())
 
         num_test = 1
         test_batch = np.zeros((num_test, 480, 640, 3), dtype=np.float32)
