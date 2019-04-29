@@ -10,7 +10,7 @@ import cv2
 import keras
 
 from keras.layers import Input, Conv2D, MaxPooling2D, Conv2DTranspose, Add
-from keras.layers import Concatenate, Dropout, Dense
+from keras.layers import Concatenate, Dropout, Dense, Lambda
 from keras.models import Model
 from keras.models import load_model
 
@@ -29,6 +29,10 @@ class vgg16convs_vertex_pred():
     def __init__(self, input):
 
         self.build(input)
+
+    def backend_debug_print(self, x):
+        K.print_tensor(x) # , [tf.shape(x)]
+        return x
 
     def build(self, input):
 
@@ -80,6 +84,8 @@ class vgg16convs_vertex_pred():
         print(upscore_conv5.shape)
 
         score_conv4 = Conv2D(num_units, (1,1), name='score_conv4', padding='same', activation='relu')(conv4_3)
+
+        score_conv4_p = Lambda(self.backend_debug_print(score_conv4))  # , output_shape=K.shape(score_conv4)
 
         add_score = Add()([score_conv4, upscore_conv5])
         dropout = Dropout(rate, name='dropout')(add_score)
@@ -248,8 +254,8 @@ if __name__ == "__main__":
 
     num_classes = 3 # including the background as '0'
 
-    # data_path = '/home/shawnle/Documents/Restore_PoseCNN/PoseCNN-master/data_syn_LOV/data_2_objs/'
-    data_path = '/home/shawnle/Documents/Projects/PoseCNN-master/data/LOV/3d_train_data'
+    data_path = '/home/shawnle/Documents/Restore_PoseCNN/PoseCNN-master/data_syn_LOV/data_2_objs/'
+    # data_path = '/home/shawnle/Documents/Projects/PoseCNN-master/data/LOV/3d_train_data'
     dat_gen = data_generator(data_path, num_classes=num_classes)
 
     # mode = 'INFERENCE'
@@ -259,7 +265,7 @@ if __name__ == "__main__":
         batch_size = 5
         num_samples = 2822
         steps_per_epoch = ceil(num_samples / batch_size)
-        mdw.the_model.fit_generator(dat_gen, steps_per_epoch=steps_per_epoch, epochs=200, verbose=2)
+        mdw.the_model.fit_generator(dat_gen, steps_per_epoch=steps_per_epoch, epochs=10, verbose=2)
         mdw.the_model.save('my_model.h5')  # creates a HDF5 file 'my_model.h5'
 
     if mode == 'INFERENCE':
