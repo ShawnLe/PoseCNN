@@ -1,3 +1,5 @@
+from __future__ import print_function
+
 import glob
 import os
 
@@ -20,6 +22,7 @@ import keras.layers as KL
 import keras.engine as KE
 
 
+
 ############################################################
 #  Network Class
 ############################################################
@@ -31,7 +34,7 @@ class vgg16convs_vertex_pred():
         self.build(input)
 
     def backend_debug_print(self, x):
-        K.print_tensor(x) # , [tf.shape(x)]
+        K.print_tensor(x, message='hello_print') # , [tf.shape(x)]
         return x
 
     def build(self, input):
@@ -85,10 +88,14 @@ class vgg16convs_vertex_pred():
 
         score_conv4 = Conv2D(num_units, (1,1), name='score_conv4', padding='same', activation='relu')(conv4_3)
 
-        score_conv4_p = Lambda(self.backend_debug_print(score_conv4))  # , output_shape=K.shape(score_conv4)
+        # score_conv4_p = Lambda(self.backend_debug_print)(score_conv4)  # , output_shape=K.shape(score_conv4)
+        score_conv4_p = K.print_tensor(score_conv4)
 
-        add_score = Add()([score_conv4, upscore_conv5])
+        # add_score = Add()([score_conv4, upscore_conv5])
+        add_score = Add()([score_conv4_p, upscore_conv5])
+
         dropout = Dropout(rate, name='dropout')(add_score)
+        
         #upscore = deconv(dropout, int(16*scale), int(16*scale), num_units, int(8*scale), int(8*scale), name='upscore', trainable=False)
         upscore = KL.Conv2DTranspose(num_units, (int(16*scale), int(16*scale)), strides=(int(8*scale), int(8*scale)), name='upscore', padding='same', data_format="channels_last", trainable=False)(dropout)
 
@@ -98,6 +105,8 @@ class vgg16convs_vertex_pred():
         vertex_reg = 1
         num_classes = 3
         if vertex_reg:
+            init_weights = keras.initializers.TruncatedNormal(mean=0.0, stddev=0.001)
+
             score_conv5_vertex = Conv2D(128, (1,1), name='score_conv5_vertex', padding='same', activation='relu')(conv5_3)
             #   upscore_conv5_vertex = deconv(score_conv5_vertex, 4, 4, 128, 2, 2, name='upscore_conv5_vertex')
             upscore_conv5_vertex = KL.Conv2DTranspose(128, (4, 4), strides=(2, 2), name='upscore_conv5_vertex', padding='same', data_format="channels_last", trainable=False)(score_conv5_vertex)
@@ -238,7 +247,7 @@ if __name__ == "__main__":
     # main()
 
     input = Input(shape=(480, 640, 3), dtype='float32')
-    print(input.shape)
+    # print(input.shape)
 
     mdw = vgg16convs_vertex_pred(input)
     print('model output shape {}'.format(mdw.the_model.output_shape))
@@ -252,20 +261,24 @@ if __name__ == "__main__":
 
     mdw.the_model.summary()              
 
+    print([tensor for tensor in mdw.the_model.trainable_weights])
+
     num_classes = 3 # including the background as '0'
 
-    data_path = '/home/shawnle/Documents/Restore_PoseCNN/PoseCNN-master/data_syn_LOV/data_2_objs/'
-    # data_path = '/home/shawnle/Documents/Projects/PoseCNN-master/data/LOV/3d_train_data'
+    # data_path = '/home/shawnle/Documents/Restore_PoseCNN/PoseCNN-master/data_syn_LOV/data_2_objs/'
+    data_path = '/home/shawnle/Documents/Projects/PoseCNN-master/data/LOV/3d_train_data'
     dat_gen = data_generator(data_path, num_classes=num_classes)
 
     # mode = 'INFERENCE'
     mode = 'TRAIN'
 
     if mode == 'TRAIN' :
+        epoch_num = 100
         batch_size = 5
-        num_samples = 2822
+        # num_samples = 2822
+        num_samples = 12
         steps_per_epoch = ceil(num_samples / batch_size)
-        mdw.the_model.fit_generator(dat_gen, steps_per_epoch=steps_per_epoch, epochs=10, verbose=2)
+        mdw.the_model.fit_generator(dat_gen, steps_per_epoch=steps_per_epoch, epochs=epoch_num, verbose=2)
         mdw.the_model.save('my_model.h5')  # creates a HDF5 file 'my_model.h5'
 
     if mode == 'INFERENCE':
