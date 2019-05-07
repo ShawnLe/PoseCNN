@@ -21,6 +21,7 @@ from keras.layers import Layer
 import keras.layers as KL
 import keras.engine as KE
 
+import tensorflow as tf
 
 
 ############################################################
@@ -106,13 +107,17 @@ class vgg16convs_vertex_pred():
         num_classes = 3
         if vertex_reg:
             init_weights = keras.initializers.TruncatedNormal(mean=0.0, stddev=0.001)
+            init_bias = keras.initializers.Constant(value=0.)
+            regularizer = keras.regularizers.l2(0.0001)
 
-            score_conv5_vertex = Conv2D(128, (1,1), name='score_conv5_vertex', padding='same', activation='relu')(conv5_3)
+            # score_conv5_vertex = Conv2D(128, (1,1), name='score_conv5_vertex', padding='same', activation='relu')(conv5_3)
+            score_conv5_vertex = Conv2D(128, (1,1), name='score_conv5_vertex', padding='same', activation='relu', kernel_initializer=init_weights, bias_initializer=init_bias, kernel_regularizer=regularizer, bias_regularizer=regularizer)(conv5_3)
             #   upscore_conv5_vertex = deconv(score_conv5_vertex, 4, 4, 128, 2, 2, name='upscore_conv5_vertex')
             upscore_conv5_vertex = KL.Conv2DTranspose(128, (4, 4), strides=(2, 2), name='upscore_conv5_vertex', padding='same', data_format="channels_last", trainable=False)(score_conv5_vertex)
 
             
-            score_conv4_vertex = Conv2D(128, (1,1), name='score_conv4_vertex', padding='same', activation='relu')(conv4_3)
+            # score_conv4_vertex = Conv2D(128, (1,1), name='score_conv4_vertex', padding='same', activation='relu')(conv4_3)
+            score_conv4_vertex = Conv2D(128, (1,1), name='score_conv4_vertex', padding='same', activation='relu', kernel_initializer=init_weights, bias_initializer=init_bias, kernel_regularizer=regularizer, bias_regularizer=regularizer)(conv4_3)
             
             add_score_vertex = Add()([score_conv4_vertex, upscore_conv5_vertex])
             dropout_vertex = Dropout(rate, name='dropout_vertex')(add_score_vertex)
@@ -120,7 +125,8 @@ class vgg16convs_vertex_pred():
             upscore_vertex = KL.Conv2DTranspose(128, (int(16*scale), int(16*scale)), strides=(int(8*scale), int(8*scale)), name='upscore_vertex', padding='same', data_format="channels_last", trainable=False)(dropout_vertex)
             
             # 3*num_classes == depth == # channels-> a fixed output like this 
-            vertex_pred = Conv2D(3*num_classes, (1,1), name='vertex_pred', padding='same', activation='relu')(upscore_vertex)
+            # vertex_pred = Conv2D(3*num_classes, (1,1), name='vertex_pred', padding='same', activation='relu')(upscore_vertex)
+            vertex_pred = Conv2D(3*num_classes, (1,1), name='vertex_pred', padding='same', activation='relu', kernel_initializer=init_weights, bias_initializer=init_bias, kernel_regularizer=regularizer, bias_regularizer=regularizer)(upscore_vertex)
             # vertex_pred = Conv2D(2*num_classes, (1,1), name='vertex_pred', padding='same', activation='relu')(upscore_vertex)
 
 
@@ -195,6 +201,48 @@ def _vote_centers(im_label, cls_indexes, center, poses, num_classes):
     return vertex_targets, vertex_weights
 
 
+
+def get_a_sample(data_path=None, shuffle=True, batch_size=1, num_classes=1):
+
+    b = 0
+    index = -1
+    dataset_indexes = prepare_dataset_indexes(data_path)
+
+    # print len(dataset_indexes)
+
+    if b == 0:
+        # init arrays
+        batch_rgb = np.zeros((batch_size, 480, 640, 3), dtype=np.float32)
+        batch_center = np.zeros((batch_size, 480, 640, num_classes * 3), dtype=np.float32)            
+
+    index = (index + 1) % len(dataset_indexes)
+    if shuffle and index == 0:
+        np.random.shuffle(dataset_indexes)
+
+    data_rec = dataset_indexes[index]
+
+    rgb_raw = pad_im(cv2.imread(data_rec["color"], cv2.IMREAD_UNCHANGED), 16)
+    rgb = rgb_raw.astype(np.float32, copy=True)
+    mat = loadmat(data_rec["meta"])
+    im_lbl = pad_im(cv2.imread(data_rec['label'], cv2.IMREAD_UNCHANGED), 16)
+
+    batch_rgb[b,:,:,:] = rgb
+
+    center_targets, center_weights = _vote_centers(im_lbl, mat['cls_indexes'], mat['center'], mat['poses'], num_classes)
+    batch_center[b,:,:,:] = center_targets
+
+    b = b+1
+
+    if b >= batch_size:
+        inputs = batch_rgb
+        outputs = batch_center
+
+        b = 0
+
+        return (inputs, outputs)
+
+
+
 def data_generator(data_path=None, shuffle=True, batch_size=1, num_classes=1):
 
     b = 0
@@ -259,9 +307,63 @@ if __name__ == "__main__":
                 loss='mean_squared_error',
                 metrics=['accuracy'])
 
-    mdw.the_model.summary()              
+    mdw.the_model.summary()                  
 
-    print([tensor for tensor in mdw.the_model.trainable_weights])
+    optim = mdw.the_model.optimizer
+    ws = []
+    grads = []
+    grad_funs = []
+    print("mdw.the_model.input = {}".format(mdw.the_model.input))
+    print("mdw.the_model.output = {}".format(mdw.the_model.layers[-1].output))
+    print("targets[0] = {}".format(mdw.the_model.targets[0]))
+    # input_tensors = [mdw.the_model.input[0],
+    #                 #  mdw.the_model.sample_weights[0],
+    #                  K.placeholder(shape=(None,None,None,9)),
+    #                  K.learning_phase()]
+    print("the_model.sample_weights = {}".format(mdw.the_model.sample_weights[0]))
+    input_tensors = [K.placeholder(shape=(480, 640, 3), dtype='float32'),
+                    # K.placeholder(shape=(480, 640, 3), dtype='float32'),  # input shape
+                    # K.placeholder(shape=(None,None,None,9)), # output shape
+                    # K.placeholder(shape=(None)),
+
+                    mdw.the_model.sample_weights[0],
+                    # K.placeholder([3]),
+                    
+                    # K.placeholder(shape=(480,640,9)),
+                    mdw.the_model.targets[0],
+                    K.learning_phase()]
+
+    print(input_tensors)
+
+    weights = mdw.the_model.trainable_weights
+
+    print("weights:")
+    for weight in weights:
+        print(weight)
+        print (K.is_keras_tensor(weight))
+        # print ("w name ={}".format(weight.name[:-2]))
+    #     if mdw.the_model.get_layer(weight.name[:-2]).trainable:
+    #         ws.append(weight)
+
+    # weights = [weight for weight in weights if mdw.the_model.get_layer(weight.name[:-2]).trainable] 
+    # get_gradients returns tensors
+    print("tt loss tensor {}".format(mdw.the_model.total_loss))
+    print("is ts {}".format(K.is_keras_tensor(weight)))
+    gradients = optim.get_gradients(mdw.the_model.total_loss, weights)
+
+    print (gradients)
+    print ("gradients is keras tensor? {}".format(K.is_keras_tensor(gradients[0])))
+
+    get_gradients = K.function(inputs=input_tensors, outputs=gradients)
+    print(get_gradients)
+
+    # for w in mdw.the_model.trainable_weights:
+    #     ws.append(w)
+    #     grad = optim.get_gradients(mdw.the_model.total_loss, w)
+    #     grads.append(grad)
+    #     print(w)
+    #     print(grad)
+    #     get_gradients = K.function(inputs=input_tensors, outputs=grad)
 
     num_classes = 3 # including the background as '0'
 
@@ -271,6 +373,59 @@ if __name__ == "__main__":
 
     # mode = 'INFERENCE'
     mode = 'TRAIN'
+
+    test_model = load_model('my_model.h5')
+
+    print("input = {}".format(test_model.inputs))
+    print("output = {}".format(test_model.outputs))
+
+    a_sample = get_a_sample(data_path, num_classes=num_classes)
+    print(np.shape(a_sample[0]))
+    print(np.shape(a_sample[1]))
+
+    # rgb = np.squeeze(a_sample[0], axis=(1,))
+    # print(np.shape(rgb))
+    inputs=[#np.squeeze(a_sample[0]),
+            np.ones(shape=((480,640,3)), dtype=np.float32), 
+            np.ones((1), dtype=np.float32),
+            np.ones(shape=((1,480,640,9)), dtype=np.float32),
+            # a_sample[1],
+            0]
+    print("ws={}".format(test_model.trainable_weights))
+    # print(zip(test_model.trainable_weights, get_gradients(inputs)))
+    print(get_gradients(inputs))
+
+
+    writer = tf.summary.FileWriter('.')
+    writer.add_graph(tf.get_default_graph())
+    writer.flush()
+
+
+    print(mdw.the_model.sample_weights[0])
+    print(np.shape(mdw.the_model.sample_weights[0]))
+    exit()
+
+    # print(test_model.get_layer('score_conv4_vertex').get_weights())
+    # print(np.shape(test_model.get_layer('score_conv4_vertex').get_weights()[0]))
+    # print(len(ws))
+    # print(len(grads))
+
+    for layer in test_model.layers:
+        print (layer.name)
+        print (layer.input)
+        print (layer.output)
+
+    tf_sess = K.get_session()
+    graph = K.get_default_graph()
+    print(graph.get_operations())
+    # tf_sess.run([gradients])
+    # tf_sess.run([grads[2]], feed_dict={'score_conv4_vertex/kernel:0': test_model.get_layer('score_conv4_vertex').get_weights()[0],
+    #                                     'vertex_pred_sample_weights' : np.ones(np.shape(test_model.get_layer('score_conv4_vertex').get_weights()[0])) })
+    # print(  grads[2](  [test_model.get_layer('score_conv4_vertex').get_weights()[0]]  )  )
+
+
+
+    exit()
 
     if mode == 'TRAIN' :
         epoch_num = 100
