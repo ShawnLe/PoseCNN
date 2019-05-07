@@ -68,7 +68,7 @@ class vgg16convs_vertex_pred():
         # conv5_3 = Conv2D(512, (3,3), name='conv5_3', padding='same', activation='relu')(conv5_2)
 
         vgg16 = keras.applications.vgg16.VGG16(include_top=False, weights='imagenet', input_tensor=input)
-
+        print('vgg output :', vgg16.output.get_shape())
         # until the last 2 layers, all are freezed for training
         for layer in vgg16.layers:
           layer.trainable = False
@@ -84,8 +84,12 @@ class vgg16convs_vertex_pred():
 
         score_conv5 = Conv2D(num_units, (1,1), name='score_conv5', padding='same', activation='relu')(conv5_3)
         # upscore_conv5 = deconv(score_conv5, 4, 4, num_units, 2, 2, name='upscore_conv5', trainable=False)  # how to make a keras equivalent layer?
+        # Keras bug: before and after KL.Conv2DTranspose, shape is lost. Specify output shape of the tensor
+        # score_conv5: (?, 30, 40, 64)
+        # upscore_conv5: (?, ?, ?, 64)
+        print('score_conv5:', score_conv5.shape)
         upscore_conv5 = KL.Conv2DTranspose(num_units, (4,4), strides=(2,2), name='upscore_conv5', padding='same', data_format="channels_last", trainable=False)(score_conv5)
-        print(upscore_conv5.shape)
+        print('upscore_conv5:', upscore_conv5.shape)
 
         score_conv4 = Conv2D(num_units, (1,1), name='score_conv4', padding='same', activation='relu')(conv4_3)
 
@@ -99,7 +103,7 @@ class vgg16convs_vertex_pred():
         
         #upscore = deconv(dropout, int(16*scale), int(16*scale), num_units, int(8*scale), int(8*scale), name='upscore', trainable=False)
         upscore = KL.Conv2DTranspose(num_units, (int(16*scale), int(16*scale)), strides=(int(8*scale), int(8*scale)), name='upscore', padding='same', data_format="channels_last", trainable=False)(dropout)
-
+        print('output shape: ', upscore.get_shape())
 
         # 'prob' and 'label_2d' will be added later. 'gt_label_weight' cannot be added because of hard_label C++ module
 
@@ -128,6 +132,7 @@ class vgg16convs_vertex_pred():
             # vertex_pred = Conv2D(3*num_classes, (1,1), name='vertex_pred', padding='same', activation='relu')(upscore_vertex)
             vertex_pred = Conv2D(3*num_classes, (1,1), name='vertex_pred', padding='same', activation='relu', kernel_initializer=init_weights, bias_initializer=init_bias, kernel_regularizer=regularizer, bias_regularizer=regularizer)(upscore_vertex)
             # vertex_pred = Conv2D(2*num_classes, (1,1), name='vertex_pred', padding='same', activation='relu')(upscore_vertex)
+            # vertex_pred = K.reshape(vertex_pred, (480, 640, 3*num_classes))
 
 
         # create keras model
@@ -321,7 +326,7 @@ if __name__ == "__main__":
     #                  K.placeholder(shape=(None,None,None,9)),
     #                  K.learning_phase()]
     print("the_model.sample_weights = {}".format(mdw.the_model.sample_weights[0]))
-    input_tensors = [K.placeholder(shape=(480, 640, 3), dtype='float32'),
+    input_tensors = [K.placeholder(shape=(None, 480, 640, 3), dtype='float32'),
                     # K.placeholder(shape=(480, 640, 3), dtype='float32'),  # input shape
                     # K.placeholder(shape=(None,None,None,9)), # output shape
                     # K.placeholder(shape=(None)),
@@ -352,6 +357,8 @@ if __name__ == "__main__":
     gradients = optim.get_gradients(mdw.the_model.total_loss, weights)
 
     print (gradients)
+    # print (gradients[0].op)
+    print (gradients[0].graph)
     print ("gradients is keras tensor? {}".format(K.is_keras_tensor(gradients[0])))
 
     get_gradients = K.function(inputs=input_tensors, outputs=gradients)
@@ -367,8 +374,8 @@ if __name__ == "__main__":
 
     num_classes = 3 # including the background as '0'
 
-    # data_path = '/home/shawnle/Documents/Restore_PoseCNN/PoseCNN-master/data_syn_LOV/data_2_objs/'
-    data_path = '/home/shawnle/Documents/Projects/PoseCNN-master/data/LOV/3d_train_data'
+    data_path = '/home/shawnle/Documents/Restore_PoseCNN/PoseCNN-master/data_syn_LOV/data_2_objs/'
+    # data_path = '/home/shawnle/Documents/Projects/PoseCNN-master/data/LOV/3d_train_data'
     dat_gen = data_generator(data_path, num_classes=num_classes)
 
     # mode = 'INFERENCE'
@@ -382,11 +389,24 @@ if __name__ == "__main__":
     a_sample = get_a_sample(data_path, num_classes=num_classes)
     print(np.shape(a_sample[0]))
     print(np.shape(a_sample[1]))
+    print("vertext_pred_target = {}".format(test_model.targets[0].name))
+    print("vertext_pred_target len = {}".format(len(test_model.targets)))
+    print("vertext_pred_target shape = {}".format(test_model.targets[0].shape))
+
+    sess = tf.Session()
+    sess.run(tf.initializers.global_variables())
+
+    feed_dict = { input : np.ones(shape=((1,480,640,3)), dtype=np.float32),
+                #  test_model.targets[0] : np.ones(shape=((1,480,640,9)), dtype=np.float32)
+                'vertex_pred_target_1:0' : np.ones(shape=((1,480,640,9)), dtype=np.float32)
+    }
+    sess.run([gradients], feed_dict=feed_dict)
+
 
     # rgb = np.squeeze(a_sample[0], axis=(1,))
     # print(np.shape(rgb))
     inputs=[#np.squeeze(a_sample[0]),
-            np.ones(shape=((480,640,3)), dtype=np.float32), 
+            np.ones(shape=((1,480,640,3)), dtype=np.float32), 
             np.ones((1), dtype=np.float32),
             np.ones(shape=((1,480,640,9)), dtype=np.float32),
             # a_sample[1],

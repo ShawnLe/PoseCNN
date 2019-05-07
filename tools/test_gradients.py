@@ -8,6 +8,7 @@ probs_1 = Dense(2, activation='sigmoid')(probs)
 model = Model(input=input, output=probs_1)
 model.compile(optimizer='sgd', loss='binary_crossentropy')
 
+# exit()
 
 weights = model.trainable_weights # weight tensors
 print("weights:")
