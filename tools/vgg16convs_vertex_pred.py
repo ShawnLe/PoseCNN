@@ -9,17 +9,27 @@ from scipy.io import loadmat
 
 import cv2
 
-import keras
+# import keras
+from tensorflow.python import keras
 
-from keras.layers import Input, Conv2D, MaxPooling2D, Conv2DTranspose, Add
-from keras.layers import Concatenate, Dropout, Dense, Lambda
-from keras.models import Model
-from keras.models import load_model
+# from keras.layers import Input, Conv2D, MaxPooling2D, Conv2DTranspose, Add
+from tensorflow.python.keras.layers import Input, Conv2D, MaxPooling2D, Conv2DTranspose, Add, Concatenate, Dropout, Dense, Lambda
+from tensorflow.python.keras.models import Model, load_model
+# from tensorflow.python.keras.models import load_model
 
-from keras import backend as K
-from keras.layers import Layer
-import keras.layers as KL
-import keras.engine as KE
+# from keras.layers import Concatenate, Dropout, Dense, Lambda
+# from keras.models import Model
+# from keras.models import load_model
+
+from tensorflow.python.keras import backend as K
+# import keras.backend as K
+from tensorflow.python.keras.layers import Layer
+# import tensorflow.python.keras.layers as KL
+# import tensorflow.python.keras.engine as KE
+# from keras import backend as K
+# from keras.layers import Layer
+# import keras.layers as KL
+# import keras.engine as KE
 
 import tensorflow as tf
 
@@ -84,11 +94,11 @@ class vgg16convs_vertex_pred():
 
         score_conv5 = Conv2D(num_units, (1,1), name='score_conv5', padding='same', activation='relu')(conv5_3)
         # upscore_conv5 = deconv(score_conv5, 4, 4, num_units, 2, 2, name='upscore_conv5', trainable=False)  # how to make a keras equivalent layer?
-        # Keras bug: before and after KL.Conv2DTranspose, shape is lost. Specify output shape of the tensor
+        # Keras bug: before and after KL.Conv2DTranspose, shape is lost. Use tensorflow keras instead. Link: https://github.com/keras-team/keras/issues/6777
         # score_conv5: (?, 30, 40, 64)
         # upscore_conv5: (?, ?, ?, 64)
         print('score_conv5:', score_conv5.shape)
-        upscore_conv5 = KL.Conv2DTranspose(num_units, (4,4), strides=(2,2), name='upscore_conv5', padding='same', data_format="channels_last", trainable=False)(score_conv5)
+        upscore_conv5 = Conv2DTranspose(num_units, (4,4), strides=(2,2), name='upscore_conv5', padding='same', data_format="channels_last", trainable=False)(score_conv5)
         print('upscore_conv5:', upscore_conv5.shape)
 
         score_conv4 = Conv2D(num_units, (1,1), name='score_conv4', padding='same', activation='relu')(conv4_3)
@@ -102,7 +112,7 @@ class vgg16convs_vertex_pred():
         dropout = Dropout(rate, name='dropout')(add_score)
         
         #upscore = deconv(dropout, int(16*scale), int(16*scale), num_units, int(8*scale), int(8*scale), name='upscore', trainable=False)
-        upscore = KL.Conv2DTranspose(num_units, (int(16*scale), int(16*scale)), strides=(int(8*scale), int(8*scale)), name='upscore', padding='same', data_format="channels_last", trainable=False)(dropout)
+        upscore = Conv2DTranspose(num_units, (int(16*scale), int(16*scale)), strides=(int(8*scale), int(8*scale)), name='upscore', padding='same', data_format="channels_last", trainable=False)(dropout)
         print('output shape: ', upscore.get_shape())
 
         # 'prob' and 'label_2d' will be added later. 'gt_label_weight' cannot be added because of hard_label C++ module
@@ -117,7 +127,7 @@ class vgg16convs_vertex_pred():
             # score_conv5_vertex = Conv2D(128, (1,1), name='score_conv5_vertex', padding='same', activation='relu')(conv5_3)
             score_conv5_vertex = Conv2D(128, (1,1), name='score_conv5_vertex', padding='same', activation='relu', kernel_initializer=init_weights, bias_initializer=init_bias, kernel_regularizer=regularizer, bias_regularizer=regularizer)(conv5_3)
             #   upscore_conv5_vertex = deconv(score_conv5_vertex, 4, 4, 128, 2, 2, name='upscore_conv5_vertex')
-            upscore_conv5_vertex = KL.Conv2DTranspose(128, (4, 4), strides=(2, 2), name='upscore_conv5_vertex', padding='same', data_format="channels_last", trainable=False)(score_conv5_vertex)
+            upscore_conv5_vertex = Conv2DTranspose(128, (4, 4), strides=(2, 2), name='upscore_conv5_vertex', padding='same', data_format="channels_last", trainable=False)(score_conv5_vertex)
 
             
             # score_conv4_vertex = Conv2D(128, (1,1), name='score_conv4_vertex', padding='same', activation='relu')(conv4_3)
@@ -126,7 +136,7 @@ class vgg16convs_vertex_pred():
             add_score_vertex = Add()([score_conv4_vertex, upscore_conv5_vertex])
             dropout_vertex = Dropout(rate, name='dropout_vertex')(add_score_vertex)
             #   upscore_vertex = deconv(dropout_vertex, int(16*scale), int(16*scale), 128, int(8*scale), int(8*scale), name='upscore_vertex', trainable=False)
-            upscore_vertex = KL.Conv2DTranspose(128, (int(16*scale), int(16*scale)), strides=(int(8*scale), int(8*scale)), name='upscore_vertex', padding='same', data_format="channels_last", trainable=False)(dropout_vertex)
+            upscore_vertex = Conv2DTranspose(128, (int(16*scale), int(16*scale)), strides=(int(8*scale), int(8*scale)), name='upscore_vertex', padding='same', data_format="channels_last", trainable=False)(dropout_vertex)
             
             # 3*num_classes == depth == # channels-> a fixed output like this 
             # vertex_pred = Conv2D(3*num_classes, (1,1), name='vertex_pred', padding='same', activation='relu')(upscore_vertex)
@@ -303,49 +313,49 @@ if __name__ == "__main__":
     # print(input.shape)
 
     mdw = vgg16convs_vertex_pred(input)
-    print('model output shape {}'.format(mdw.the_model.output_shape))
+    # print('model output shape {}'.format(mdw.the_model.output_shape))
 
-    # rmsprop = keras.optimizers.RMSprop(lr=0.0001, rho=0.9, epsilon=None, decay=0.0)
+    # # rmsprop = keras.optimizers.RMSprop(lr=0.0001, rho=0.9, epsilon=None, decay=0.0)
     sgd = keras.optimizers.SGD(lr=0.0001, momentum=0.9, decay=0.9)
 
     mdw.the_model.compile(optimizer=sgd,
                 loss='mean_squared_error',
                 metrics=['accuracy'])
 
-    mdw.the_model.summary()                  
+    # mdw.the_model.summary()                  
 
     optim = mdw.the_model.optimizer
     ws = []
     grads = []
     grad_funs = []
-    print("mdw.the_model.input = {}".format(mdw.the_model.input))
-    print("mdw.the_model.output = {}".format(mdw.the_model.layers[-1].output))
-    print("targets[0] = {}".format(mdw.the_model.targets[0]))
+    # print("mdw.the_model.input = {}".format(mdw.the_model.input))
+    # print("mdw.the_model.output = {}".format(mdw.the_model.layers[-1].output))
+    # print("targets[0] = {}".format(mdw.the_model.targets[0]))
     # input_tensors = [mdw.the_model.input[0],
     #                 #  mdw.the_model.sample_weights[0],
     #                  K.placeholder(shape=(None,None,None,9)),
     #                  K.learning_phase()]
-    print("the_model.sample_weights = {}".format(mdw.the_model.sample_weights[0]))
-    input_tensors = [K.placeholder(shape=(None, 480, 640, 3), dtype='float32'),
-                    # K.placeholder(shape=(480, 640, 3), dtype='float32'),  # input shape
-                    # K.placeholder(shape=(None,None,None,9)), # output shape
-                    # K.placeholder(shape=(None)),
+    # print("the_model.sample_weights = {}".format(mdw.the_model.sample_weights[0]))
+    # input_tensors = [K.placeholder(shape=(None, 480, 640, 3), dtype='float32'),
+    #                 # K.placeholder(shape=(480, 640, 3), dtype='float32'),  # input shape
+    #                 # K.placeholder(shape=(None,None,None,9)), # output shape
+    #                 # K.placeholder(shape=(None)),
 
-                    mdw.the_model.sample_weights[0],
-                    # K.placeholder([3]),
+    #                 mdw.the_model.sample_weights[0],
+    #                 # K.placeholder([3]),
                     
-                    # K.placeholder(shape=(480,640,9)),
-                    mdw.the_model.targets[0],
-                    K.learning_phase()]
+    #                 # K.placeholder(shape=(480,640,9)),
+    #                 mdw.the_model.targets[0],
+    #                 K.learning_phase()]
 
-    print(input_tensors)
+    # print(input_tensors)
 
     weights = mdw.the_model.trainable_weights
 
-    print("weights:")
-    for weight in weights:
-        print(weight)
-        print (K.is_keras_tensor(weight))
+    # print("weights:")
+    # for weight in weights:
+    #     print(weight)
+        # print (K.is_keras_tensor(weight))
         # print ("w name ={}".format(weight.name[:-2]))
     #     if mdw.the_model.get_layer(weight.name[:-2]).trainable:
     #         ws.append(weight)
@@ -353,16 +363,15 @@ if __name__ == "__main__":
     # weights = [weight for weight in weights if mdw.the_model.get_layer(weight.name[:-2]).trainable] 
     # get_gradients returns tensors
     print("tt loss tensor {}".format(mdw.the_model.total_loss))
-    print("is ts {}".format(K.is_keras_tensor(weight)))
     gradients = optim.get_gradients(mdw.the_model.total_loss, weights)
 
     print (gradients)
     # print (gradients[0].op)
-    print (gradients[0].graph)
-    print ("gradients is keras tensor? {}".format(K.is_keras_tensor(gradients[0])))
+    # print (gradients[0].graph)
+    # print ("gradients is keras tensor? {}".format(K.is_keras_tensor(gradients[0])))
 
-    get_gradients = K.function(inputs=input_tensors, outputs=gradients)
-    print(get_gradients)
+    # get_gradients = K.function(inputs=input_tensors, outputs=gradients)
+    # print(get_gradients)
 
     # for w in mdw.the_model.trainable_weights:
     #     ws.append(w)
@@ -374,34 +383,40 @@ if __name__ == "__main__":
 
     num_classes = 3 # including the background as '0'
 
-    data_path = '/home/shawnle/Documents/Restore_PoseCNN/PoseCNN-master/data_syn_LOV/data_2_objs/'
-    # data_path = '/home/shawnle/Documents/Projects/PoseCNN-master/data/LOV/3d_train_data'
+    # data_path = '/home/shawnle/Documents/Restore_PoseCNN/PoseCNN-master/data_syn_LOV/data_2_objs/'
+    data_path = '/home/shawnle/Documents/Projects/PoseCNN-master/data/LOV/3d_train_data'
     dat_gen = data_generator(data_path, num_classes=num_classes)
 
     # mode = 'INFERENCE'
     mode = 'TRAIN'
+    
+    # test_model = load_model('my_model.h5')
 
-    test_model = load_model('my_model.h5')
-
-    print("input = {}".format(test_model.inputs))
-    print("output = {}".format(test_model.outputs))
+    # print("input = {}".format(test_model.inputs))
+    # print("output = {}".format(test_model.outputs))
 
     a_sample = get_a_sample(data_path, num_classes=num_classes)
     print(np.shape(a_sample[0]))
     print(np.shape(a_sample[1]))
-    print("vertext_pred_target = {}".format(test_model.targets[0].name))
-    print("vertext_pred_target len = {}".format(len(test_model.targets)))
-    print("vertext_pred_target shape = {}".format(test_model.targets[0].shape))
+    # print("vertext_pred_target = {}".format(test_model.targets[0].name))
+    # print("vertext_pred_target len = {}".format(len(test_model.targets)))
+    # print("vertext_pred_target shape = {}".format(test_model.targets[0].shape))
+
+    g = tf.get_default_graph()
+    print("all ops = {}".format(g.get_operations()))
+
 
     sess = tf.Session()
     sess.run(tf.initializers.global_variables())
 
     feed_dict = { input : np.ones(shape=((1,480,640,3)), dtype=np.float32),
-                #  test_model.targets[0] : np.ones(shape=((1,480,640,9)), dtype=np.float32)
-                'vertex_pred_target_1:0' : np.ones(shape=((1,480,640,9)), dtype=np.float32)
+                 mdw.the_model.targets[0] : np.ones(shape=((1,480,640,9)), dtype=np.float32),
+                 mdw.the_model.sample_weights[0] : np.ones((1), dtype=np.float32),
+                 'dropout/keras_learning_phase:0' : 0                 
     }
-    sess.run([gradients], feed_dict=feed_dict)
+    print(sess.run([gradients], feed_dict=feed_dict))
 
+    exit()
 
     # rgb = np.squeeze(a_sample[0], axis=(1,))
     # print(np.shape(rgb))
@@ -442,8 +457,6 @@ if __name__ == "__main__":
     # tf_sess.run([grads[2]], feed_dict={'score_conv4_vertex/kernel:0': test_model.get_layer('score_conv4_vertex').get_weights()[0],
     #                                     'vertex_pred_sample_weights' : np.ones(np.shape(test_model.get_layer('score_conv4_vertex').get_weights()[0])) })
     # print(  grads[2](  [test_model.get_layer('score_conv4_vertex').get_weights()[0]]  )  )
-
-
 
     exit()
 
