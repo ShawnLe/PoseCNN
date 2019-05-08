@@ -33,6 +33,7 @@ from tensorflow.python.keras.layers import Layer
 
 import tensorflow as tf
 
+from numpy import linalg as LA
 
 ############################################################
 #  Network Class
@@ -310,12 +311,11 @@ if __name__ == "__main__":
     # main()
 
     input = Input(shape=(480, 640, 3), dtype='float32')
-    # print(input.shape)
 
     mdw = vgg16convs_vertex_pred(input)
     # print('model output shape {}'.format(mdw.the_model.output_shape))
 
-    # # rmsprop = keras.optimizers.RMSprop(lr=0.0001, rho=0.9, epsilon=None, decay=0.0)
+    # rmsprop = keras.optimizers.RMSprop(lr=0.0001, rho=0.9, epsilon=None, decay=0.0)
     sgd = keras.optimizers.SGD(lr=0.0001, momentum=0.9, decay=0.9)
 
     mdw.the_model.compile(optimizer=sgd,
@@ -351,7 +351,7 @@ if __name__ == "__main__":
     # print(input_tensors)
 
     weights = mdw.the_model.trainable_weights
-
+    print("len(weights)", len(weights))
     # print("weights:")
     # for weight in weights:
     #     print(weight)
@@ -383,8 +383,8 @@ if __name__ == "__main__":
 
     num_classes = 3 # including the background as '0'
 
-    # data_path = '/home/shawnle/Documents/Restore_PoseCNN/PoseCNN-master/data_syn_LOV/data_2_objs/'
-    data_path = '/home/shawnle/Documents/Projects/PoseCNN-master/data/LOV/3d_train_data'
+    data_path = '/home/shawnle/Documents/Restore_PoseCNN/PoseCNN-master/data_syn_LOV/data_2_objs/'
+    # data_path = '/home/shawnle/Documents/Projects/PoseCNN-master/data/LOV/3d_train_data'
     dat_gen = data_generator(data_path, num_classes=num_classes)
 
     # mode = 'INFERENCE'
@@ -402,19 +402,31 @@ if __name__ == "__main__":
     # print("vertext_pred_target len = {}".format(len(test_model.targets)))
     # print("vertext_pred_target shape = {}".format(test_model.targets[0].shape))
 
-    g = tf.get_default_graph()
-    print("all ops = {}".format(g.get_operations()))
+    # g = tf.get_default_graph()
+    # print("all ops = {}".format(g.get_operations()))
 
 
     sess = tf.Session()
     sess.run(tf.initializers.global_variables())
 
-    feed_dict = { input : np.ones(shape=((1,480,640,3)), dtype=np.float32),
-                 mdw.the_model.targets[0] : np.ones(shape=((1,480,640,9)), dtype=np.float32),
+    # feed_dict = { input : np.ones(shape=((1,480,640,3)), dtype=np.float32),
+    #              mdw.the_model.targets[0] : np.ones(shape=((1,480,640,9)), dtype=np.float32),
+    #              mdw.the_model.sample_weights[0] : np.ones((1), dtype=np.float32),
+    #              'dropout/keras_learning_phase:0' : 0                 
+    # }
+    feed_dict = { input : a_sample[0],
+                 mdw.the_model.targets[0] : a_sample[1],
                  mdw.the_model.sample_weights[0] : np.ones((1), dtype=np.float32),
                  'dropout/keras_learning_phase:0' : 0                 
     }
-    print(sess.run([gradients], feed_dict=feed_dict))
+    grad_val = sess.run([gradients], feed_dict=feed_dict)
+    # print("len grad_val = ", len(grad_val))
+    # print("grad_val 0 0 = ", grad_val[0][0].shape)
+    # print("grad_val 0 1 = ", grad_val[0][1].shape)
+    for grad in grad_val:
+        for grad_ in grad:
+            print('grad shape =', grad_.shape)
+            print('grad norm =', LA.norm(grad_))
 
     exit()
 
