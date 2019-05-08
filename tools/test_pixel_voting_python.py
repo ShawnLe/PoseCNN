@@ -188,6 +188,9 @@ def _vote_centers(im_label, cls_indexes, center, poses, num_classes):
         im_label refers to num_class 0 as background
     """
 
+    # print("[_vote_centers] hello.")
+    # print("center = ", center)
+
     width = im_label.shape[1]
     height = im_label.shape[0]
     vertex_targets = np.zeros((height, width, 3*num_classes), dtype=np.float32)
@@ -197,6 +200,8 @@ def _vote_centers(im_label, cls_indexes, center, poses, num_classes):
     for i in xrange(1, num_classes):
         y, x = np.where(im_label == i)
         if len(x) > 0:
+            # print("I am working. len(x) = ", len(x))
+
             ind = np.where(cls_indexes == i)[0] 
             c[0] = center[ind, 0]
             c[1] = center[ind, 1]
@@ -213,6 +218,9 @@ def _vote_centers(im_label, cls_indexes, center, poses, num_classes):
             vertex_targets[y, x, 3*i+1] = R[1,:]
             vertex_targets[y, x, 3*i+2] = z
             vertex_weights[y, x, start:end] = 10.0
+
+    # np.save("vx.npy", vertex_targets[:,:,3])
+    # cv2.imwrite("vx.png", vertex_targets[:,:,3])
 
     return vertex_targets, vertex_weights
 
@@ -312,6 +320,7 @@ def pixel_voting(batch_center):
     print (dims)
 
     cv2.imwrite('vx.png', center_targets[:,:,0])
+    np.save('vx.npy', center_targets[:,:,0])
 
     # do the voting
     vote_space = np.zeros(shape=(dims[0], dims[1]))
@@ -324,27 +333,31 @@ def pixel_voting(batch_center):
             norm = LA.norm([ux, uy])
 
             if (norm > 0):
-                print("norm > 0")
+                # print("norm > 0")
                 ux_ = ux / norm
                 uy_ = uy / norm
 
-                delta = uy_ / ux_
+                # delta = uy_ / ux_
 
                 xi = x
                 yi = y
-                if ux_ >= 0:
-                    inc = 1.
-                else:
-                    inc = -1.
+                # if ux_ >= 0:
+                #     inc = 1.
+                # else:
+                #     inc = -1.
 
                 while 0<=xi and xi<dims[1] and 0<=yi and yi<dims[0]:
 
                     vote_space[int(yi), int(xi)] = vote_space[int(yi), int(xi)] + 1.
 
-                    xi = xi+inc
-                    yi = delta * (xi - x) + y
+                    # xi = xi+inc
+                    # yi = delta * (xi - x) + y
+
+                    xi = xi + ux_
+                    yi = yi + uy_
 
     cv2.imwrite('vote_space.png', vote_space)
+    np.save("vote_space.npy", vote_space)
 
     return None
 
@@ -431,8 +444,8 @@ if __name__ == "__main__":
 
     num_classes = 3 # including the background as '0'
 
-    data_path = '/home/shawnle/Documents/Restore_PoseCNN/PoseCNN-master/data_syn_LOV/data_2_objs/'
-    # data_path = '/home/shawnle/Documents/Projects/PoseCNN-master/data/LOV/3d_train_data'
+    # data_path = '/home/shawnle/Documents/Restore_PoseCNN/PoseCNN-master/data_syn_LOV/data_2_objs/'
+    data_path = '/home/shawnle/Documents/Projects/PoseCNN-master/data/LOV/3d_train_data'
     dat_gen = data_generator(data_path, num_classes=num_classes)
 
     # mode = 'INFERENCE'
@@ -446,6 +459,9 @@ if __name__ == "__main__":
     a_sample = get_a_sample(data_path, num_classes=num_classes)
     print(np.shape(a_sample[0]))
     print(np.shape(a_sample[1]))
+
+    # np.save("vx.npy", a_sample[1][0,:,:,3])
+    # cv2.imwrite("vx.png", a_sample[1][0,:,:,3])
     # print("vertext_pred_target = {}".format(test_model.targets[0].name))
     # print("vertext_pred_target len = {}".format(len(test_model.targets)))
     # print("vertext_pred_target shape = {}".format(test_model.targets[0].shape))
@@ -453,6 +469,6 @@ if __name__ == "__main__":
     # g = tf.get_default_graph()
     # print("all ops = {}".format(g.get_operations()))
 
-    cls_id = 0
+    cls_id = 1
     pixel_voting(a_sample[1][:,:,:, 3*cls_id : 3*cls_id +3])
     
