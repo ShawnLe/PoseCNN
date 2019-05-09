@@ -308,13 +308,15 @@ def data_generator(data_path=None, shuffle=True, batch_size=1, num_classes=1):
             yield (inputs, outputs)
         
 
-def pixel_voting(batch_center, num_keypoint=1):
+def pixel_voting(vertex_map, num_keypoint=1):
     '''
         a quick prototype for pixel-based voting of keypoints to be, later, become a tensor op
+        @input vertex_map[height, width, 2*K], K: number of keypoints
     '''
 
-    center_targets = batch_center[0,:,:,:]
-    print('center_targets shape =', center_targets.shape)
+    center_targets = vertex_map
+    assert len(center_targets.shape) == 3, 'center_targets shape = {}'.format(center_targets.shape)
+    assert center_targets.shape[2] == 2*num_keypoint
 
     dims = center_targets.shape[0:2]
     print (dims)
@@ -323,50 +325,53 @@ def pixel_voting(batch_center, num_keypoint=1):
     np.save('vx.npy', center_targets[:,:,0])
 
     # do the voting
-    vote_space = np.zeros(shape=(dims[0], dims[1]))
-    for y in xrange(dims[0]):
-        for x in xrange(dims[1]):
+    # vote_space = np.zeros(shape=(dims[0], dims[1]))
+    vote_space = np.zeros(shape=(dims[0], dims[1], num_keypoint))
+    for k in xrange(num_keypoint):
+        for y in xrange(dims[0]):
+            for x in xrange(dims[1]):
 
-            ux = center_targets[y,x,0]
-            uy = center_targets[y,x,1]
+                ux = center_targets[y,x, k*2+0]
+                uy = center_targets[y,x, k*2+1]
 
-            norm = LA.norm([ux, uy])
+                norm = LA.norm([ux, uy])
 
-            if (norm > 0):
-                # print("norm > 0")
-                ux_ = ux / norm
-                uy_ = uy / norm
+                if (norm > 0):
+                    # print("norm > 0")
+                    ux_ = ux / norm
+                    uy_ = uy / norm
 
-                # delta = uy_ / ux_
+                    # delta = uy_ / ux_
 
-                xi = x
-                yi = y
-                # if ux_ >= 0:
-                #     inc = 1.
-                # else:
-                #     inc = -1.
+                    xi = x
+                    yi = y
+                    # if ux_ >= 0:
+                    #     inc = 1.
+                    # else:
+                    #     inc = -1.
 
-                while 0<=xi and xi<dims[1] and 0<=yi and yi<dims[0]:
+                    while 0<=xi and xi<dims[1] and 0<=yi and yi<dims[0]:
 
-                    vote_space[int(yi), int(xi)] = vote_space[int(yi), int(xi)] + 1.
+                        vote_space[int(yi), int(xi), k] = vote_space[int(yi), int(xi), k] + 1.
 
-                    # xi = xi+inc
-                    # yi = delta * (xi - x) + y
+                        # xi = xi+inc
+                        # yi = delta * (xi - x) + y
 
-                    xi = xi + ux_
-                    yi = yi + uy_
+                        xi = xi + ux_
+                        yi = yi + uy_
 
-    cv2.imwrite('vote_space.png', vote_space)
+    cv2.imwrite('vote_space.png', vote_space[:,:,0])
     # np.save("vote_space.npy", vote_space)
 
     max_loc = np.zeros(shape=(2, num_keypoint))
     max_vote = np.zeros(shape=(1, num_keypoint))
 
-    for y in xrange(dims[0]):
-        for x in xrange(dims[1]):
-            if vote_space[y,x] > max_vote[0]:
-                max_vote[0] = vote_space[y,x]
-                max_loc[:,0] = (x, y)
+    for k in xrange(num_keypoint):
+        for y in xrange(dims[0]):
+            for x in xrange(dims[1]):
+                if vote_space[y,x,k] > max_vote[k]:
+                    max_vote[k] = vote_space[y,x,k]
+                    max_loc[:,k] = (x, y)
 
     return max_loc
 
@@ -468,6 +473,7 @@ if __name__ == "__main__":
     a_sample = get_a_sample(data_path, num_classes=num_classes)
     print(np.shape(a_sample[0]))
     print(np.shape(a_sample[1]))
+    print(np.shape(np.squeeze(a_sample[1])))
 
     # np.save("vx.npy", a_sample[1][0,:,:,3])
     # cv2.imwrite("vx.png", a_sample[1][0,:,:,3])
@@ -479,6 +485,7 @@ if __name__ == "__main__":
     # print("all ops = {}".format(g.get_operations()))
 
     cls_id = 1
-    max_loc = pixel_voting(a_sample[1][:,:,:, 3*cls_id : 3*cls_id +3])
+    batch_num = 0
+    max_loc = pixel_voting(np.squeeze(a_sample[1][batch_num,:,:, 3*cls_id : 3*cls_id +2]))
     print(max_loc)
     
