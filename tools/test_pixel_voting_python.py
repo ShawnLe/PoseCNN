@@ -308,7 +308,7 @@ def data_generator(data_path=None, shuffle=True, batch_size=1, num_classes=1):
             yield (inputs, outputs)
         
 
-def pixel_voting(batch_center):
+def pixel_voting(batch_center, num_keypoint=1):
     '''
         a quick prototype for pixel-based voting of keypoints to be, later, become a tensor op
     '''
@@ -319,7 +319,7 @@ def pixel_voting(batch_center):
     dims = center_targets.shape[0:2]
     print (dims)
 
-    cv2.imwrite('vx.png', center_targets[:,:,0])
+    # cv2.imwrite('vx.png', center_targets[:,:,0])
     np.save('vx.npy', center_targets[:,:,0])
 
     # do the voting
@@ -357,9 +357,18 @@ def pixel_voting(batch_center):
                     yi = yi + uy_
 
     cv2.imwrite('vote_space.png', vote_space)
-    np.save("vote_space.npy", vote_space)
+    # np.save("vote_space.npy", vote_space)
 
-    return None
+    max_loc = np.zeros(shape=(2, num_keypoint))
+    max_vote = np.zeros(shape=(1, num_keypoint))
+
+    for y in xrange(dims[0]):
+        for x in xrange(dims[1]):
+            if vote_space[y,x] > max_vote[0]:
+                max_vote[0] = vote_space[y,x]
+                max_loc[:,0] = (x, y)
+
+    return max_loc
 
     
 ############################################################
@@ -444,8 +453,8 @@ if __name__ == "__main__":
 
     num_classes = 3 # including the background as '0'
 
-    # data_path = '/home/shawnle/Documents/Restore_PoseCNN/PoseCNN-master/data_syn_LOV/data_2_objs/'
-    data_path = '/home/shawnle/Documents/Projects/PoseCNN-master/data/LOV/3d_train_data'
+    data_path = '/home/shawnle/Documents/Restore_PoseCNN/PoseCNN-master/data_syn_LOV/data_2_objs/'
+    # data_path = '/home/shawnle/Documents/Projects/PoseCNN-master/data/LOV/3d_train_data'
     dat_gen = data_generator(data_path, num_classes=num_classes)
 
     # mode = 'INFERENCE'
@@ -470,5 +479,6 @@ if __name__ == "__main__":
     # print("all ops = {}".format(g.get_operations()))
 
     cls_id = 1
-    pixel_voting(a_sample[1][:,:,:, 3*cls_id : 3*cls_id +3])
+    max_loc = pixel_voting(a_sample[1][:,:,:, 3*cls_id : 3*cls_id +3])
+    print(max_loc)
     
