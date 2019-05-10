@@ -468,7 +468,7 @@ if __name__ == "__main__":
     print("shape(target) = ", a_sample[1].shape)
 
     delta_L = a_sample[1] - model_outputs[0]
-    print("delta_L squeeze shape = ", np.squeeze(delta_L).shape)
+    print("delta_L shape = ", delta_L.shape)
     print("cls 1 max loss vx= ", np.amax(delta_L[0,:,:,3]))
     print("cls 1 max loss vy= ", np.amax(delta_L[0,:,:,4]))
     print("\n\nws[-2]={}".format(test_model.trainable_weights[-2]))
@@ -478,7 +478,7 @@ if __name__ == "__main__":
     print("W_L = ", W_L)
 
     from im2col import im2col_indices
-    delta_L_T = np.transpose(np.squeeze(delta_L), (2,0,1))
+    delta_L_T = np.transpose(delta_L, (3,0,1,2))
     print ("delta_L_T shape = ", delta_L_T.shape)
     delta_L_T_2col = im2col_indices(delta_L_T, 1, 1, padding=0, stride=1)
     print("delta_L_2col shape = ", delta_L_T_2col.shape)
