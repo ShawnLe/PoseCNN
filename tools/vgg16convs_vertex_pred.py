@@ -335,7 +335,7 @@ if __name__ == "__main__":
 
 
     # TEST FROM HERE
-    mdw.the_model.summary()              
+    # mdw.the_model.summary()              
     
     optim = mdw.the_model.optimizer
     ws = []
@@ -452,49 +452,48 @@ if __name__ == "__main__":
 
     # grad_val = sess.run([gradients], feed_dict=feed_dict)
 
-    print("ws={}".format(test_model.trainable_weights))
+    # print("ws={}".format(test_model.trainable_weights))
     # print("ws={}".format(test_model.trainable_weights[-8]))
 
-    print("l -9 =".format(test_model.layers[-9]))
-    print("l -9 weights=".format(test_model.layers[-9].get_weights()))
+    # print("l -9 =".format(test_model.layers[-9]))
+    # print("l -9 weights=".format(test_model.layers[-9].get_weights()))
 
-    print("bef activation shape {}".format(test_model.layers[-7].output_shape))
-    print("bef activation tensors {}".format(test_model.layers[-7].output))
-    print("bef activation shape {}".format(test_model.layers[-8].output_shape))
-    print("bef activation tensors {}".format(test_model.layers[-8].output))
-    print("activation shape -1 {}".format(test_model.layers[-1].output_shape))
-    print("activation tesnors -1 {}".format(test_model.layers[-1].output))
+    print("\n\nws={}".format(test_model.trainable_weights))
+    print("\n\nlayers output ={}".format([l.output for l in test_model.layers]))
 
     grad_val, model_outputs, bef_relu = sess.run([test_gradients, test_model.outputs, test_model.layers[-3].output], feed_dict=feed_dict)
 
-    print("bef relu shape {}".format(bef_relu.shape))
-    bef_relu = np.squeeze(bef_relu)
-
-    # cnt = 0
-    # for i in xrange(bef_relu.shape[0]):
-    #     for j in xrange(bef_relu.shape[1]):
-    #         if bef_relu[i,j,0] > 0 or bef_relu[i,j,1] > 0: 
-    #             print("bef_relu[{},{},{}]={}".format(i,j,'0:2',bef_relu[i,j,0:2]))
-    #             cnt = cnt + 1
-    #         # for k in xrange(2):
-    #         #     if bef_relu[i,j,k] < 0: 
-    #         #         print("bef_relu[{},{},{}]={}".format(i,j,k,bef_relu[i,j,k]))
-    #         #         cnt = cnt + 1
-    # print ("total negative = ", cnt)
-
     print("len(model_outputs) =", len(model_outputs))
     print("shape(model_outputs[0])=", model_outputs[0].shape)
+    print("shape(target) = ", a_sample[1].shape)
+
+    delta_L = a_sample[1] - model_outputs[0]
+    print("delta_L squeeze shape = ", np.squeeze(delta_L).shape)
+    print("cls 1 max loss vx= ", np.amax(delta_L[0,:,:,3]))
+    print("cls 1 max loss vy= ", np.amax(delta_L[0,:,:,4]))
+    print("\n\nws[-2]={}".format(test_model.trainable_weights[-2]))
+    
+    # get the trained weight values by sess.run
+    W_L = sess.run ([test_model.trainable_weights[-2]])
+    print("W_L = ", W_L)
+
+    from im2col import im2col_indices
+    delta_L_T = np.transpose(np.squeeze(delta_L), (2,0,1))
+    print ("delta_L_T shape = ", delta_L_T.shape)
+    delta_L_T_2col = im2col_indices(delta_L_T, 1, 1, padding=0, stride=1)
+    print("delta_L_2col shape = ", delta_L_T_2col.shape)
 
     # note 0: background class
     cls_id = 1
     np.save("mdl_out_vx.npy", np.squeeze(model_outputs[0])[:,:, 3*cls_id+0])   
     np.save("mdl_out_vy.npy", np.squeeze(model_outputs[0])[:,:, 3*cls_id+1])
 
+    writer = tf.summary.FileWriter('.')
+    writer.add_graph(tf.get_default_graph())
+    writer.flush()
+
     exit()
 
-    # print("len grad_val = ", len(grad_val))
-    # print("grad_val 0 0 = ", grad_val[0][0].shape)
-    # print("grad_val 0 1 = ", grad_val[0][1].shape)
     for grad in grad_val:
         for grad_ in grad:
             grad_ = np.squeeze(grad_)
@@ -531,14 +530,10 @@ if __name__ == "__main__":
             np.ones(shape=((1,480,640,9)), dtype=np.float32),
             # a_sample[1],
             0]
-    print("ws={}".format(test_model.trainable_weights))
     # print(zip(test_model.trainable_weights, get_gradients(inputs)))
     print(get_gradients(inputs))
 
 
-    writer = tf.summary.FileWriter('.')
-    writer.add_graph(tf.get_default_graph())
-    writer.flush()
 
 
     print(mdw.the_model.sample_weights[0])
