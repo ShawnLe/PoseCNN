@@ -9,6 +9,9 @@ from scipy.io import loadmat
 
 import cv2
 
+import tensorflow as tf
+from tensorflow.python.ops import state_ops
+
 # import keras
 from tensorflow.python import keras
 
@@ -32,8 +35,6 @@ from tensorflow.python.keras.layers import Layer
 # import keras.layers as KL
 # import keras.engine as KE
 
-import tensorflow as tf
-
 from numpy import linalg as LA
 
 ############################################################
@@ -49,6 +50,18 @@ class vgg16convs_vertex_pred():
     def backend_debug_print(self, x):
         K.print_tensor(x, message='hello_print') # , [tf.shape(x)]
         return x
+
+    def smooth_l1_loss_vertex(vertex_pred, vertex_targets, vertex_weights, sigma=1.0):
+        sigma_2 = sigma ** 2
+        vertex_diff = vertex_pred - vertex_targets
+        diff = tf.multiply(vertex_weights, vertex_diff)
+        abs_diff = tf.abs(diff)
+        # tf.less (https://stackoverflow.com/questions/44759779/comparison-with-tensors-python-tensorflow)
+        smoothL1_sign = tf.stop_gradient(tf.to_float(tf.less(abs_diff, 1. / sigma_2)))
+        in_loss = tf.pow(diff, 2) * (sigma_2 / 2.) * smoothL1_sign \
+                + (abs_diff - (0.5 / sigma_2)) * (1. - smoothL1_sign)
+        loss = tf.div( tf.reduce_sum(in_loss), tf.reduce_sum(vertex_weights) + 1e-10 )
+        return loss
 
     def build(self, input):
 
@@ -326,12 +339,10 @@ if __name__ == "__main__":
     # rmsprop = keras.optimizers.RMSprop(lr=0.0001, rho=0.9, epsilon=None, decay=0.0)
     sgd = keras.optimizers.SGD(lr=0.01, momentum=0.9, decay=0.9)
 
+
     mdw.the_model.compile(optimizer=sgd,
-                loss='mean_squared_error',
+                loss=smooth_l1_loss_vertex,
                 metrics=['accuracy'])
-
-
-
 
 
     # TEST FROM HERE
@@ -397,8 +408,8 @@ if __name__ == "__main__":
 
     num_classes = 3 # including the background as '0'
 
-    data_path = '/home/shawnle/Documents/Restore_PoseCNN/PoseCNN-master/data_syn_LOV/data_2_objs/'
-    # # data_path = '/home/shawnle/Documents/Projects/PoseCNN-master/data/LOV/3d_train_data'
+    # data_path = '/home/shawnle/Documents/Restore_PoseCNN/PoseCNN-master/data_syn_LOV/data_2_objs/'
+    data_path = '/home/shawnle/Documents/Projects/PoseCNN-master/data/LOV/3d_train_data'
     dat_gen = data_generator(data_path, num_classes=num_classes)
 
     # # mode = 'INFERENCE'
@@ -406,13 +417,14 @@ if __name__ == "__main__":
     
     # get weights from pre-trained model
     test_model = load_model('my_model.h5')
-    weights = test_model.trainable_weights
+    # weights = test_model.trainable_weights
+    weights = test_model._collected_trainable_weights
     print("len(weights)", len(weights))
 
     print("tt loss tensor of test model {}".format(test_model.total_loss))
     test_gradients = test_model.optimizer.get_gradients(test_model.total_loss, weights)
 
-    print (test_gradients)
+    print("test_gradients =", test_gradients)
 
 
     # print("input = {}".format(test_model.inputs))
@@ -458,10 +470,62 @@ if __name__ == "__main__":
     # print("l -9 =".format(test_model.layers[-9]))
     # print("l -9 weights=".format(test_model.layers[-9].get_weights()))
 
-    print("\n\nws={}".format(test_model.trainable_weights))
+    print("\n\nws={}".format(test_model.trainable_weights))    
+    print("\n\nws collected ={}".format(test_model._collected_trainable_weights))
+    print("model total loss = {}".format(test_model.total_loss))
     print("\n\nlayers output ={}".format([l.output for l in test_model.layers]))
 
-    grad_val, model_outputs, bef_relu = sess.run([test_gradients, test_model.outputs, test_model.layers[-3].output], feed_dict=feed_dict)
+    class compute_optim_updates():
+        def __init__(self, test_model, grads, lr_in, momentum, decay_in, init_decay_in=0.):
+
+            self.iterations = K.variable(0, dtype='int64', name='iterations')
+            self.nesterov = False
+            self.lr = K.variable(lr_in, name='lr')
+            self.decay = decay_in
+            self.initial_decay = init_decay_in
+            self.momentum = K.variable(momentum, name='momentum')
+
+        def get_updates(self):
+
+            self.updates = [state_ops.assign_add(self.iterations, 1)]
+            # self.updates = []
+ 
+            lr = self.lr
+            if self.initial_decay > 0:
+                lr = lr * (  # pylint: disable=g-no-augmented-assignment
+                    1. / (1. + self.decay * math_ops.cast(self.iterations,
+                                                            K.dtype(self.decay))))
+
+            params = test_model._collected_trainable_weights
+            shapes = [K.int_shape(p) for p in params]
+            moments = [K.zeros(shape) for shape in shapes]
+            self.weights = [self.iterations] + moments
+            for p, g, m in zip(params, grads, moments):
+                v = self.momentum * m - lr * g  # velocity
+                self.updates.append(state_ops.assign(m, v))
+                # self.updates.append(v)
+
+                if self.nesterov:
+                    new_p = p + self.momentum * v - lr * g
+                else:
+                    new_p = p + v
+
+                # Apply constraints.
+                if getattr(p, 'constraint', None) is not None:
+                    new_p = p.constraint(new_p)
+
+                self.updates.append(state_ops.assign(p, new_p))
+                # self.updates.append(new_p)
+
+            return self.updates
+
+    cou = compute_optim_updates(test_model, test_gradients, test_model.optimizer.lr,
+                                                            test_model.optimizer.momentum,
+                                                            test_model.optimizer.decay)
+
+    # print("compute optim updates = ",cou.get_updates())  
+
+    grad_val, model_outputs, updates_val = sess.run([test_gradients, test_model.outputs, cou.get_updates()], feed_dict=feed_dict)
 
     print("len(model_outputs) =", len(model_outputs))
     print("shape(model_outputs[0])=", model_outputs[0].shape)
@@ -472,6 +536,8 @@ if __name__ == "__main__":
     print("cls 1 max loss vx= ", np.amax(delta_L[0,:,:,3]))
     print("cls 1 max loss vy= ", np.amax(delta_L[0,:,:,4]))
     print("\n\nws[-2]={}".format(test_model.trainable_weights[-2]))
+
+    exit()
     
     # get the trained weight values by sess.run
     W_L = sess.run ([test_model.trainable_weights[-2]])
