@@ -12,7 +12,10 @@ import cv2
 import tensorflow as tf
 from tensorflow.python.ops import state_ops
 
-# import keras
+# import keras via tensorflow
+# keras bug: conflict keras version
+# bug message: FailedPreconditionError (see above for traceback): Error while reading resource variable vertex_pred/kernel from Container: localhost. This could mean that the variable was uninitialized. Not found: Container localhost does not exist. (Could not find resource: localhost/vertex_pred/kernel)
+# bug linK: https://github.com/horovod/horovod/issues/511
 from tensorflow.python import keras
 
 # from keras.layers import Input, Conv2D, MaxPooling2D, Conv2DTranspose, Add
@@ -170,6 +173,7 @@ class vgg16convs_vertex_pred():
         # create keras model
         self.the_model = Model(inputs=input, outputs=vertex_pred)
         # self.the_model = Model(inputs=input, outputs=vertex_pred_after)
+        # self.__dict__.update(locals())
 
 
 ############################################################
@@ -337,7 +341,7 @@ if __name__ == "__main__":
     # execute only if run as a script
     # main()
 
-    input = Input(shape=(480, 640, 3), dtype='float32')
+    input = Input(shape=(480, 640, 3), name='the_name',dtype='float32')
 
     mdw = vgg16convs_vertex_pred(input)
     # print('model output shape {}'.format(mdw.the_model.output_shape))
@@ -351,6 +355,7 @@ if __name__ == "__main__":
                 loss=mdw.smooth_l1_loss_vertex,
                 # loss='mean_squared_error',
                 )#metrics=['accuracy'])
+
 
 
     # # TEST FROM HERE
@@ -420,7 +425,40 @@ if __name__ == "__main__":
     # data_path = '/home/shawnle/Documents/Projects/PoseCNN-master/data/LOV/3d_train_data'
     dat_gen = data_generator(data_path, num_classes=num_classes)
 
+    # ypred_shape = mdw.vertex_pred.get_shape()
+    ypred_shape = mdw.the_model.output_shape
+    print('ypred_shape: ', ypred_shape)
+    ytrue = tf.placeholder(tf.float32, shape=(None, ypred_shape[1], ypred_shape[2], ypred_shape[3]*2), name='ytrue')
+    
+    # total_loss = mdw.smooth_l1_loss_vertex(ytrue, mdw.vertex_pred)
+    total_loss = mdw.smooth_l1_loss_vertex(ytrue, mdw.the_model.layers[-1].output)
+    optimizer = tf.train.MomentumOptimizer(0.001, 0.).minimize(total_loss)
+    
+    with tf.Session() as sess:
+        # tf.initializers.global_variables()
+        tf.global_variables_initializer()
+        for i in range(20):
+            for step in range(10):
+                inp, out = next(dat_gen)
+
+                # print('length of inp: ', inp[0].shape, out[0].shape)
+                if len(inp) == 0: 
+                    print("empty data. Continue..")
+                    continue
+
+                feed_dict = { input : inp[0],
+                              ytrue: out[0]
+                            #  mdw.the_model.targets[0] : np.ones(shape=((1,480,640,9)), dtype=np.float32),
+                            #  mdw.the_model.sample_weights[0] : np.ones((1), dtype=np.float32),
+                            #  'dropout/keras_learning_phase:0' : 0                 
+                }
+
+                _, loss, inp_tensor = sess.run([optimizer, total_loss, input], 
+                                            feed_dict= feed_dict)#{input: inp[0], mdw.the_model.output: out[0][...,:9], ytrue: out[0]})
+                # print('let\'s assume ', loss, inp_tensor.shape)
     # # mode = 'INFERENCE'
+    print('-------------------------------------')
+    print('it passes the sess run......')
     mode = 'TRAIN'
     
     # # get weights from pre-trained model
