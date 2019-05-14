@@ -262,7 +262,8 @@ class vgg16convs_vertex_pred():
             self.output = vertex_pred
             self.layers.append(self.output)
 
-        print("layers = ", self.layers)
+        for l, i in enumerate(self.layers, 0):
+            print("layers " + str(l) + " " + str(i))
         print("model input = ", self.input)
         print("model output = ", self.output)
 
@@ -432,88 +433,6 @@ if __name__ == "__main__":
     rgb_shape = (480, 640, 3)
     md = vgg16convs_vertex_pred(shape=rgb_shape)
 
-
-    # # execute only if run as a script
-    # # main()
-
-    # input = Input(shape=(480, 640, 3), name='the_name',dtype='float32')
-
-    # mdw = vgg16convs_vertex_pred(input)
-    # # print('model output shape {}'.format(mdw.the_model.output_shape))
-
-    # # rmsprop = keras.optimizers.RMSprop(lr=0.0001, rho=0.9, epsilon=None, decay=0.0)
-    # # sgd = keras.optimizers.SGD(lr=0.01, momentum=0.9, decay=0.9)
-    # sgd = keras.optimizers.SGD(lr=0.1, momentum=0., decay=0.9)
-
-
-    # mdw.the_model.compile(optimizer=sgd,
-    #             loss=mdw.smooth_l1_loss_vertex,
-    #             # loss='mean_squared_error',
-    #             )#metrics=['accuracy'])
-
-
-
-    # # # TEST FROM HERE
-    # # # mdw.the_model.summary()              
-    
-    # # optim = mdw.the_model.optimizer
-    # # ws = []
-    # # grads = []
-    # # grad_funs = []
-    # # # print("mdw.the_model.input = {}".format(mdw.the_model.input))
-    # # # print("mdw.the_model.output = {}".format(mdw.the_model.layers[-1].output))
-    # # # print("targets[0] = {}".format(mdw.the_model.targets[0]))
-    # # # input_tensors = [mdw.the_model.input[0],
-    # # #                 #  mdw.the_model.sample_weights[0],
-    # # #                  K.placeholder(shape=(None,None,None,9)),
-    # # #                  K.learning_phase()]
-    # # # print("the_model.sample_weights = {}".format(mdw.the_model.sample_weights[0]))
-    # # # input_tensors = [K.placeholder(shape=(None, 480, 640, 3), dtype='float32'),
-    # # #                 # K.placeholder(shape=(480, 640, 3), dtype='float32'),  # input shape
-    # # #                 # K.placeholder(shape=(None,None,None,9)), # output shape
-    # # #                 # K.placeholder(shape=(None)),
-
-    # # #                 mdw.the_model.sample_weights[0],
-    # # #                 # K.placeholder([3]),
-                    
-    # # #                 # K.placeholder(shape=(480,640,9)),
-    # # #                 mdw.the_model.targets[0],
-    # # #                 K.learning_phase()]
-
-    # # # print(input_tensors)
-
-    # # # get weights from train model
-    # # # weights = mdw.the_model.trainable_weights
-    # # # print("len(weights)", len(weights))
-    # # # print("weights:")
-    # # # for weight in weights:
-    # # #     print(weight)
-    # #     # print (K.is_keras_tensor(weight))
-    # #     # print ("w name ={}".format(weight.name[:-2]))
-    # # #     if mdw.the_model.get_layer(weight.name[:-2]).trainable:
-    # # #         ws.append(weight)
-
-    # # # weights = [weight for weight in weights if mdw.the_model.get_layer(weight.name[:-2]).trainable] 
-    # # # get_gradients returns tensors
-    # # # print("tt loss tensor {}".format(mdw.the_model.total_loss))
-    # # # gradients = optim.get_gradients(mdw.the_model.total_loss, weights)
-
-    # # # print (gradients)
-    # # # print (gradients[0].op)
-    # # # print (gradients[0].graph)
-    # # # print ("gradients is keras tensor? {}".format(K.is_keras_tensor(gradients[0])))
-
-    # # # get_gradients = K.function(inputs=input_tensors, outputs=gradients)
-    # # # print(get_gradients)
-
-    # # # for w in mdw.the_model.trainable_weights:
-    # # #     ws.append(w)
-    # # #     grad = optim.get_gradients(mdw.the_model.total_loss, w)
-    # # #     grads.append(grad)
-    # # #     print(w)
-    # # #     print(grad)
-    # # #     get_gradients = K.function(inputs=input_tensors, outputs=grad)
-
     num_classes = 3 # including the background as '0'
 
     batch_size = 10
@@ -522,11 +441,7 @@ if __name__ == "__main__":
     # data_path = '/home/shawnle/Documents/Projects/PoseCNN-master/data/LOV/3d_train_data'
     dat_gen = data_generator(data_path, num_classes=num_classes, batch_size=batch_size)
 
-    # ypred_shape = mdw.vertex_pred.get_shape()
-    # ypred_shape = mdw.the_model.output_shape
-    # print('ypred_shape: ', ypred_shape)
-    # ytrue = tf.placeholder(tf.float32, shape=(None, ypred_shape[1], ypred_shape[2], ypred_shape[3]*2), name='ytrue')
-
+    print('activation layer = ', md.layers[-4])
     print(md.layers[-1].shape)
     vertex_targets = tf.placeholder(tf.float32, shape=md.layers[-1].shape)
     print("vtt shape = ", vertex_targets.shape)
@@ -536,7 +451,7 @@ if __name__ == "__main__":
     print(type(vertex_targets))
     # total_loss = mdw.smooth_l1_loss_vertex(ytrue, mdw.vertex_pred)
     total_loss = md.smooth_l1_loss_vertex(md.layers[-1], vertex_targets, vertex_weights)
-    optimizer = tf.train.MomentumOptimizer(0.001, 0.).minimize(total_loss)
+    optimizer = tf.train.MomentumOptimizer(0.001, 0.9).minimize(total_loss)
 
     config = tf.ConfigProto()
     config.gpu_options.per_process_gpu_memory_fraction = 0.7
@@ -565,276 +480,15 @@ if __name__ == "__main__":
                 feed_dict = { md.input : inp[0],
                               vertex_targets: out[0],
                               vertex_weights: out[1]
-                            #  mdw.the_model.targets[0] : np.ones(shape=((1,480,640,9)), dtype=np.float32),
-                            #  mdw.the_model.sample_weights[0] : np.ones((1), dtype=np.float32),
-                            #  'dropout/keras_learning_phase:0' : 0                 
                 }
 
-                _, loss = sess.run([optimizer, total_loss], feed_dict= feed_dict, options=run_options, run_metadata=run_metadata)#{input: inp[0], mdw.the_model.output: out[0][...,:9], ytrue: out[0]})
+                _, loss, mdinp, mdact, mdact1, out_val, vertex_diff = sess.run([optimizer, total_loss, md.input, md.layers[8][0], md.layers[9][0], md.output, md.output -vertex_targets], feed_dict= feed_dict, options=run_options, run_metadata=run_metadata)
+
+                np.save('mdinp_'+ str(iter) +'.npy', mdinp)
+                np.save('mdact_'+ str(iter) +'.npy', mdact)
+                np.save('mdact1_'+ str(iter) +'.npy', mdact1)
+                np.save('out_val_'+ str(iter) +'.npy', out_val)
+                np.save('vertex_diff_' + str(iter) + '.npy', vertex_diff)
+
                 print('iter ' + str(iter) + '/' + str(epoch) + ': --> loss:', loss)
                 iter = iter + 1
-
-    # # mode = 'INFERENCE'
-    print('-------------------------------------')
-    print('it passes the sess run......')
-    mode = 'TRAIN'
-    
-    # # # get weights from pre-trained model
-    # # test_model = load_model('my_model.h5')
-    # # # weights = test_model.trainable_weights
-    # # weights = test_model._collected_trainable_weights
-    # # print("len(weights)", len(weights))
-
-    # # print("tt loss tensor of test model {}".format(test_model.total_loss))
-    # # test_gradients = test_model.optimizer.get_gradients(test_model.total_loss, weights)
-
-    # # print("test_gradients =", test_gradients)
-
-
-    # # # print("input = {}".format(test_model.inputs))
-    # # # print("output = {}".format(test_model.outputs))
-
-    # # a_sample = get_a_sample(data_path, num_classes=num_classes)
-    # # print(np.shape(a_sample[0]))
-    # # print(np.shape(a_sample[1]))
-    # # # print("vertext_pred_target = {}".format(test_model.targets[0].name))
-    # # # print("vertext_pred_target len = {}".format(len(test_model.targets)))
-    # # # print("vertext_pred_target shape = {}".format(test_model.targets[0].shape))
-
-    # # # g = tf.get_default_graph()
-    # # # print("all ops = {}".format(g.get_operations()))
-
-
-    # # sess = tf.Session()
-    # # sess.run(tf.initializers.global_variables())
-
-    # # # feed_dict = { input : np.ones(shape=((1,480,640,3)), dtype=np.float32),
-    # # #              mdw.the_model.targets[0] : np.ones(shape=((1,480,640,9)), dtype=np.float32),
-    # # #              mdw.the_model.sample_weights[0] : np.ones((1), dtype=np.float32),
-    # # #              'dropout/keras_learning_phase:0' : 0                 
-    # # # }
-    # # # feed to train model
-    # # # feed_dict = { input : a_sample[0],
-    # # #              mdw.the_model.targets[0] : a_sample[1],
-    # # #              mdw.the_model.sample_weights[0] : np.ones((1), dtype=np.float32),
-    # # #              'dropout/keras_learning_phase:0' : 0                 
-    # # # }
-    # # # feed to pretrain model
-    # # feed_dict = { test_model.input : a_sample[0],
-    # #              test_model.targets[0] : a_sample[1],
-    # #              test_model.sample_weights[0] : np.ones((1), dtype=np.float32),
-    # #              'dropout/keras_learning_phase:0' : 0
-    # # }
-
-    # # # grad_val = sess.run([gradients], feed_dict=feed_dict)
-
-    # # # print("ws={}".format(test_model.trainable_weights))
-    # # # print("ws={}".format(test_model.trainable_weights[-8]))
-
-    # # # print("l -9 =".format(test_model.layers[-9]))
-    # # # print("l -9 weights=".format(test_model.layers[-9].get_weights()))
-
-    # # print("\n\nws={}".format(test_model.trainable_weights))    
-    # # print("\n\nws collected ={}".format(test_model._collected_trainable_weights))
-    # # print("model total loss = {}".format(test_model.total_loss))
-    # # print("\n\nlayers output ={}".format([l.output for l in test_model.layers]))
-
-    # # class compute_optim_updates():
-    # #     def __init__(self, test_model, grads, lr_in, momentum, decay_in, init_decay_in=0.):
-
-    # #         self.iterations = K.variable(0, dtype='int64', name='iterations')
-    # #         self.nesterov = False
-    # #         self.lr = K.variable(lr_in, name='lr')
-    # #         self.decay = decay_in
-    # #         self.initial_decay = init_decay_in
-    # #         self.momentum = K.variable(momentum, name='momentum')
-
-    # #     def get_updates(self):
-
-    # #         self.updates = [state_ops.assign_add(self.iterations, 1)]
-    # #         # self.updates = []
- 
-    # #         lr = self.lr
-    # #         if self.initial_decay > 0:
-    # #             lr = lr * (  # pylint: disable=g-no-augmented-assignment
-    # #                 1. / (1. + self.decay * math_ops.cast(self.iterations,
-    # #                                                         K.dtype(self.decay))))
-
-    # #         params = test_model._collected_trainable_weights
-    # #         shapes = [K.int_shape(p) for p in params]
-    # #         moments = [K.zeros(shape) for shape in shapes]
-    # #         self.weights = [self.iterations] + moments
-    # #         for p, g, m in zip(params, grads, moments):
-    # #             v = self.momentum * m - lr * g  # velocity
-    # #             self.updates.append(state_ops.assign(m, v))
-    # #             # self.updates.append(v)
-
-    # #             if self.nesterov:
-    # #                 new_p = p + self.momentum * v - lr * g
-    # #             else:
-    # #                 new_p = p + v
-
-    # #             # Apply constraints.
-    # #             if getattr(p, 'constraint', None) is not None:
-    # #                 new_p = p.constraint(new_p)
-
-    # #             self.updates.append(state_ops.assign(p, new_p))
-    # #             # self.updates.append(new_p)
-
-    # #         return self.updates
-
-    # # cou = compute_optim_updates(test_model, test_gradients, test_model.optimizer.lr,
-    # #                                                         test_model.optimizer.momentum,
-    # #                                                         test_model.optimizer.decay)
-
-    # # # print("compute optim updates = ",cou.get_updates())  
-
-    # # grad_val, model_outputs, updates_val = sess.run([test_gradients, test_model.outputs, cou.get_updates()], feed_dict=feed_dict)
-
-    # # print("len(model_outputs) =", len(model_outputs))
-    # # print("shape(model_outputs[0])=", model_outputs[0].shape)
-    # # print("shape(target) = ", a_sample[1].shape)
-
-    # # delta_L = a_sample[1] - model_outputs[0]
-    # # print("delta_L shape = ", delta_L.shape)
-    # # print("cls 1 max loss vx= ", np.amax(delta_L[0,:,:,3]))
-    # # print("cls 1 max loss vy= ", np.amax(delta_L[0,:,:,4]))
-    # # print("\n\nws[-2]={}".format(test_model.trainable_weights[-2]))
-
-    # # exit()
-    
-    # # # get the trained weight values by sess.run
-    # # W_L = sess.run ([test_model.trainable_weights[-2]])
-    # # print("W_L = ", W_L)
-
-    # # from im2col import im2col_indices
-    # # delta_L_T = np.transpose(delta_L, (3,0,1,2))
-    # # print ("delta_L_T shape = ", delta_L_T.shape)
-    # # delta_L_T_2col = im2col_indices(delta_L_T, 1, 1, padding=0, stride=1)
-    # # print("delta_L_2col shape = ", delta_L_T_2col.shape)
-
-    # # # note 0: background class
-    # # cls_id = 1
-    # # np.save("mdl_out_vx.npy", np.squeeze(model_outputs[0])[:,:, 3*cls_id+0])   
-    # # np.save("mdl_out_vy.npy", np.squeeze(model_outputs[0])[:,:, 3*cls_id+1])
-
-    # # writer = tf.summary.FileWriter('.')
-    # # writer.add_graph(tf.get_default_graph())
-    # # writer.flush()
-
-    # # exit()
-
-    # # for grad in grad_val:
-    # #     for grad_ in grad:
-    # #         grad_ = np.squeeze(grad_)
-    # #         print('grad shape =', grad_.shape)
-
-    # #         if len(grad_.shape) > 1:
-    # #             for i in xrange(grad_.shape[0]):
-    # #                 for j in xrange(grad_.shape[1]):
-    # #                     if (i > j or i < j) and abs(grad_[i,j]) > 0.00000001 :
-    # #                         print((i,j))                        
-    # #         else :
-    # #             print("bias {}", grad_)
-    # #             for i in xrange(grad_.shape[0]):
-    # #                 if grad_[i] < 0:
-    # #                     print ("grad_[{}]={}".format(i,grad_[i]))
-            
-    # #         if grad_.shape[0] > grad_.shape[1]:
-    # #             min_dim = grad_.shape[1]
-    # #         else:
-    # #             min_dim = grad_.shape[0]
-
-    # #         for i in xrange(min_dim):
-    # #             print("grad_[{},{}]={}".format(i,i,grad_[i,i]))
-
-    # #         print('grad norm =', LA.norm(grad_))
-
-    # # exit()
-
-    # # # rgb = np.squeeze(a_sample[0], axis=(1,))
-    # # # print(np.shape(rgb))
-    # # inputs=[#np.squeeze(a_sample[0]),
-    # #         np.ones(shape=((1,480,640,3)), dtype=np.float32), 
-    # #         np.ones((1), dtype=np.float32),
-    # #         np.ones(shape=((1,480,640,9)), dtype=np.float32),
-    # #         # a_sample[1],
-    # #         0]
-    # # # print(zip(test_model.trainable_weights, get_gradients(inputs)))
-    # # print(get_gradients(inputs))
-
-
-
-
-    # # print(mdw.the_model.sample_weights[0])
-    # # print(np.shape(mdw.the_model.sample_weights[0]))
-    # # exit()
-
-    # # # print(test_model.get_layer('score_conv4_vertex').get_weights())
-    # # # print(np.shape(test_model.get_layer('score_conv4_vertex').get_weights()[0]))
-    # # # print(len(ws))
-    # # # print(len(grads))
-
-    # # for layer in test_model.layers:
-    # #     print (layer.name)
-    # #     print (layer.input)
-    # #     print (layer.output)
-
-    # # tf_sess = K.get_session()
-    # # graph = K.get_default_graph()
-    # # print(graph.get_operations())
-    # # # tf_sess.run([gradients])
-    # # # tf_sess.run([grads[2]], feed_dict={'score_conv4_vertex/kernel:0': test_model.get_layer('score_conv4_vertex').get_weights()[0],
-    # # #                                     'vertex_pred_sample_weights' : np.ones(np.shape(test_model.get_layer('score_conv4_vertex').get_weights()[0])) })
-    # # # print(  grads[2](  [test_model.get_layer('score_conv4_vertex').get_weights()[0]]  )  )
-
-    # # exit()
-
-    # # # TEST TO HERE
-
-
-
-
-
-    # if mode == 'TRAIN' :
-    #     epoch_num = 30
-    #     batch_size = 3
-    #     # num_samples = 2822
-    #     num_samples = 12
-    #     steps_per_epoch = int(ceil(num_samples / batch_size))
-    #     mdw.the_model.fit_generator(dat_gen, steps_per_epoch=steps_per_epoch, epochs=epoch_num, verbose=2)
-    #     mdw.the_model.save('my_model.h5')  # creates a HDF5 file 'my_model.h5'
-
-    # if mode == 'INFERENCE':
-
-    #     test_model = load_model('my_model.h5')
-
-    #     print(test_model.get_weights())
-    #     print(type(test_model.get_weights()))
-    #     print(np.shape(test_model.get_weights()))
-    #     print(np.shape(test_model.get_weights()[0]))
-    #     print(test_model.get_weights()[0])
-    #     print(np.shape(test_model.get_weights()[0]))
-    #     print(type(test_model.get_weights()[0]))
-
-    #     for lr in test_model.layers:
-    #         print(lr.name)
-        
-    #     print(test_model.get_layer('score_conv4_vertex').get_weights())
-
-    #     num_test = 1
-    #     test_batch = np.zeros((num_test, 480, 640, 3), dtype=np.float32)
-
-    #     sample_ = pad_im(cv2.imread(os.path.join(data_path, '{:06}-color.png'.format(150)), cv2.IMREAD_UNCHANGED), 16)
-    #     sample = sample_.astype(np.float32, copy=True)
-
-    #     test_batch[0,:,:,:] = sample
-    #     pred = test_model.predict(test_batch)
-
-    #     print (pred.shape)
-    #     cv2.imwrite('vx0.png', pred[0,:,:,3])
-    #     cv2.imwrite('vy0.png', pred[0,:,:,4])
-    #     cv2.imwrite('Z0.png', pred[0,:,:,5])
-    #     cv2.imwrite('vx1.png', pred[0,:,:,6])
-    #     cv2.imwrite('vy1.png', pred[0,:,:,7])
-    #     cv2.imwrite('Z1.png', pred[0,:,:,8])
