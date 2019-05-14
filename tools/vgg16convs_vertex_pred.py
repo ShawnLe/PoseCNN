@@ -16,32 +16,6 @@ from tensorflow.python.ops import state_ops
 
 from fcn.config import cfg
 
-# import keras via tensorflow
-# keras bug: conflict keras version
-# bug message: FailedPreconditionError (see above for traceback): Error while reading resource variable vertex_pred/kernel from Container: localhost. This could mean that the variable was uninitialized. Not found: Container localhost does not exist. (Could not find resource: localhost/vertex_pred/kernel)
-# bug linK: https://github.com/horovod/horovod/issues/511
-# from tensorflow.python import keras
-
-# from keras.layers import Input, Conv2D, MaxPooling2D, Conv2DTranspose, Add
-# from tensorflow.python.keras.layers import Input, Conv2D, MaxPooling2D, Conv2DTranspose, Add, Concatenate, Dropout, Dense, Lambda, Activation
-# from tensorflow.python.keras.models import Model, load_model
-# from tensorflow.python.keras.activations import relu
-# from tensorflow.python.keras.models import load_model
-
-# from keras.layers import Concatenate, Dropout, Dense, Lambda
-# from keras.models import Model
-# from keras.models import load_model
-
-# from tensorflow.python.keras import backend as K
-# import keras.backend as K
-# from tensorflow.python.keras.layers import Layer
-# import tensorflow.python.keras.layers as KL
-# import tensorflow.python.keras.engine as KE
-# from keras import backend as K
-# from keras.layers import Layer
-# import keras.layers as KL
-# import keras.engine as KE
-
 from numpy import linalg as LA
 
 
@@ -65,6 +39,20 @@ def max_pool(input, k_h, k_w, s_h, s_w, name, padding=DEFAULT_PADDING):
                             padding=padding,
                             name=name)
 
+def add(inputs, name):
+    if isinstance(inputs[0], tuple):
+        inputs[0] = inputs[0][0]
+
+    if isinstance(inputs[1], tuple):
+        inputs[1] = inputs[1][0]
+
+    return tf.add_n(inputs, name=name)
+
+def dropout(input, keep_prob, name):
+    if isinstance(input, tuple):
+        input = input[0]
+    return tf.nn.dropout(input, keep_prob, name=name)
+    
 def conv(input, k_h, k_w, c_o, s_h, s_w, name, reuse=None, relu=True, padding=DEFAULT_PADDING, group=1, trainable=True, biased=True, c_i=-1):
     validate_padding(padding)
     if isinstance(input, tuple):
@@ -94,8 +82,44 @@ def conv(input, k_h, k_w, c_o, s_h, s_w, name, reuse=None, relu=True, padding=DE
             output = tf.nn.bias_add(output, biases)
         if relu:
             output = tf.nn.relu(output, name=scope.name)    
-    return output
+    return tf.to_float(output)
 
+def make_deconv_filter(name, f_shape, trainable=True):
+    width = f_shape[0]
+    heigh = f_shape[0]
+    f = ceil(width/2.0)
+    c = (2 * f - 1 - f % 2) / (2.0 * f)
+    bilinear = np.zeros([f_shape[0], f_shape[1]])
+    for x in range(width):
+        for y in range(heigh):
+            value = (1 - abs(x / f - c)) * (1 - abs(y / f - c))
+            bilinear[x, y] = value
+    weights = np.zeros(f_shape)
+    for i in range(f_shape[2]):
+        weights[:, :, i, i] = bilinear
+
+    init = tf.constant_initializer(value=weights, dtype=tf.float32)
+    var = tf.get_variable(name, shape=weights.shape, initializer=init, trainable=trainable)
+    return var
+
+def deconv(input, k_h, k_w, c_o, s_h, s_w, name, reuse=None, padding=DEFAULT_PADDING, trainable=True):
+    validate_padding(padding)
+    c_i = input.get_shape()[-1]
+    # print("input shape =", input.get_shape())
+    with tf.variable_scope(name, reuse=reuse) as scope:
+        # Compute shape out of input
+        # in_shape = tf.shape(input)        
+        in_shape = input.get_shape()
+        h = in_shape[1] * s_h
+        w = in_shape[2] * s_w
+        # new_shape = [in_shape[0], h, w, c_o]  # cannot use. Why?
+        new_shape = [tf.shape(input)[0], h, w, c_o]
+        output_shape = tf.stack(new_shape)
+
+        # filter
+        f_shape = [k_h, k_w, c_o, c_i]
+        weights = make_deconv_filter('weights', f_shape, trainable)
+    return tf.nn.conv2d_transpose(input, weights, output_shape, [1, s_h, s_w, 1], padding=padding, name=scope.name)
 
 def load(data_path, session, ignore_missing=False):
         '''Load network weights.
@@ -105,13 +129,13 @@ def load(data_path, session, ignore_missing=False):
         '''
         data_dict = np.load(data_path).item()
         for op_name in data_dict:
-            print op_name
+            print(op_name) 
             with tf.variable_scope(op_name, reuse=True):
                 for param_name, data in data_dict[op_name].iteritems():
                     try:
                         var = tf.get_variable(param_name)
                         session.run(var.assign(data))
-                        print op_name + ' ' + param_name + ' assigned'
+                        print (op_name + ' ' + param_name + ' assigned')
                     except ValueError:
                         if not ignore_missing:
                             raise
@@ -121,7 +145,7 @@ def load(data_path, session, ignore_missing=False):
                     try:
                         var = tf.get_variable(param_name)
                         session.run(var.assign(data))
-                        print op_name + '_p ' + param_name + ' assigned'
+                        print (op_name + '_p ' + param_name + ' assigned')
                     except ValueError:
                         if not ignore_missing:
                             raise
@@ -147,6 +171,16 @@ class vgg16convs_vertex_pred():
         # self.input = tf.placeholder(tf.float32, shape=[None, None, None, 3])
         self.input = tf.placeholder(tf.float32, shape=[None, shape[0], shape[1], shape[2]])
         self.trainable = trainable
+        self.num_units = 64
+        self.keep_prob_queue = 0.5
+        self.scale = 1.
+        self.vertex_reg = 1
+        self.num_classes = 3
+
+        self.layers = []
+        self.layers.append(self.input)
+
+        # print("layers = ", self.layers)
 
         self.build()
 
@@ -154,13 +188,16 @@ class vgg16convs_vertex_pred():
         K.print_tensor(x, message='hello_print') # , [tf.shape(x)]
         return x
 
-    def smooth_l1_loss_vertex(self, vertex_targets_, vertex_pred):
+    def smooth_l1_loss_vertex(self, vertex_pred, vertex_targets, vertex_weights, sigma=1.0):
+    # def smooth_l1_loss_vertex(self, vertex_targets_, vertex_pred):
 
-        sigma = 1.0
-
-        vertex_targets, vertex_weights = vertex_targets_[...,:9],  vertex_targets_[...,9:] 
+        # vertex_targets, vertex_weights = vertex_targets_[...,:9],  vertex_targets_[...,9:] 
 
         sigma_2 = sigma ** 2
+
+        print('vt type:', type(vertex_pred))
+        print("vt pr ", vertex_pred.shape, type(vertex_pred))
+        print("vtt ", vertex_targets.shape, type(vertex_targets))
         vertex_diff = vertex_pred - vertex_targets
         diff = tf.multiply(vertex_weights, vertex_diff)
         abs_diff = tf.abs(diff)
@@ -176,102 +213,61 @@ class vgg16convs_vertex_pred():
         conv1_1 = conv(self.input, 3, 3, 64, 1, 1, name='conv1_1', c_i=3, trainable=self.trainable)
         conv1_2 = conv(conv1_1, 3, 3, 64, 1, 1, name='conv1_2', c_i=64, trainable=self.trainable)
         pool1 = max_pool(conv1_2, 2, 2, 2, 2, name='pool1')
+        self.layers.append([conv1_1, conv1_2, pool1])
 
         conv2_1 = conv(pool1, 3, 3, 128, 1, 1, name='conv2_1', c_i=64, trainable=self.trainable)
         conv2_2 = conv(conv2_1, 3, 3, 128, 1, 1, name='conv2_2', c_i=128, trainable=self.trainable)
         pool2 = max_pool(conv2_2, 2, 2, 2, 2, name='pool2')
+        self.layers.append([conv2_1, conv2_2, pool2])
 
         conv3_1 = conv(pool2, 3, 3, 256, 1, 1, name='conv3_1', c_i=128, trainable=self.trainable)
         conv3_2 = conv(conv3_1, 3, 3, 256, 1, 1, name='conv3_2', c_i=256, trainable=self.trainable)
         conv3_3 = conv(conv3_2, 3, 3, 256, 1, 1, name='conv3_3', c_i=256, trainable=self.trainable)
         pool3 = max_pool(conv3_3, 2, 2, 2, 2, name='pool3')
+        self.layers.append([conv3_1, conv3_2, conv3_3, pool3])
 
         conv4_1 = conv(pool3, 3, 3, 512, 1, 1, name='conv4_1', c_i=256, trainable=self.trainable)
         conv4_2 = conv(conv4_1, 3, 3, 512, 1, 1, name='conv4_2', c_i=512, trainable=self.trainable)
         conv4_3 = conv(conv4_2, 3, 3, 512, 1, 1, name='conv4_3', c_i=512, trainable=self.trainable)
         pool4 = max_pool(conv4_3, 2, 2, 2, 2, name='pool4')
+        self.layers.append([conv4_1, conv4_2, conv4_3, pool4])
 
         conv5_1 = conv(pool4, 3, 3, 512, 1, 1, name='conv5_1', c_i=512, trainable=self.trainable)
         conv5_2 = conv(conv5_1, 3, 3, 512, 1, 1, name='conv5_2', c_i=512, trainable=self.trainable)
         conv5_3 = conv(conv5_2, 3, 3, 512, 1, 1, name='conv5_3', c_i=512, trainable=self.trainable)
+        self.layers.append([conv5_1, conv5_2, conv5_3])
 
-        return None
+        score_conv5 = conv(conv5_3, 1, 1, self.num_units, 1, 1, name='score_conv5', c_i=512)
+        upscore_conv5 = deconv(score_conv5, 4, 4, self.num_units, 2, 2, name='upscore_conv5', trainable=False)
+        self.layers.append([score_conv5, upscore_conv5])
 
+        score_conv4 = conv(conv4_3, 1, 1, self.num_units, 1, 1, name='score_conv4', c_i=512)
 
-        # vgg16 = keras.applications.vgg16.VGG16(include_top=False, weights='imagenet', input_tensor=input)
-        # print('vgg output :', vgg16.output.get_shape())
-        # # until the last 2 layers, all are freezed for training
-        # for layer in vgg16.layers:
-        #   layer.trainable = True
+        add_score = add([score_conv4, upscore_conv5], name='add_score')
+        dropout_ = dropout(add_score, self.keep_prob_queue, name='dropout')
+        upscore = deconv(dropout_, int(16*self.scale), int(16*self.scale), self.num_units, int(8*self.scale), int(8*self.scale), name='upscore', trainable=False)
+        self.layers.append([score_conv4, add_score, dropout_, upscore])
 
-        # conv4_3 = vgg16.layers[-6].output
-        # conv5_3 = vgg16.layers[-2].output # 2nd layer from the last, block5_conv3
+        if self.vertex_reg : 
+            score_conv5_vertex = conv(conv5_3, 1, 1, 128, 1, 1, name='score_conv5_vertex', relu=False, c_i=512)
+            upscore_conv5_vertex = deconv(score_conv5_vertex, 4, 4, 128, 2, 2, name='upscore_conv5_vertex', trainable=False)
+            self.layers.append([score_conv5_vertex, upscore_conv5_vertex])
 
-        # # vertex pred head
-        # num_units = 64
-        # keep_prob_queue = 0.5 # YX uses keep_prob
-        # rate = 1 - keep_prob_queue # keras uses rate
-        # scale = 1.
+            score_conv4_vertex = conv(conv4_3, 1, 1, 128, 1, 1, name='score_conv4_vertex', relu=False, c_i=512)
+            self.layers.append(score_conv4_vertex)
 
-        # score_conv5 = Conv2D(num_units, (1,1), name='score_conv5', padding='same', activation='relu')(conv5_3)
-        # # upscore_conv5 = deconv(score_conv5, 4, 4, num_units, 2, 2, name='upscore_conv5', trainable=False)  # how to make a keras equivalent layer?
-        # # Keras bug: before and after KL.Conv2DTranspose, shape is lost. Use tensorflow keras instead. Link: https://github.com/keras-team/keras/issues/6777
-        # # score_conv5: (?, 30, 40, 64)
-        # # upscore_conv5: (?, ?, ?, 64)
-        # print('score_conv5:', score_conv5.shape)
-        # upscore_conv5 = Conv2DTranspose(num_units, (4,4), strides=(2,2), name='upscore_conv5', padding='same', data_format="channels_last", trainable=False)(score_conv5)
-        # print('upscore_conv5:', upscore_conv5.shape)
+            add_score_vertex = add([score_conv4_vertex, upscore_conv5_vertex], name='add_score_vertex')
+            dropout_vertex = dropout(add_score_vertex, self.keep_prob_queue, name='dropout_vertex')
+            upscore_vertex = deconv(dropout_vertex, int(16*self.scale), int(16*self.scale), 128, int(8*self.scale), int(8*self.scale), name='upscore_vertex', trainable=False)
+            self.layers.append([add_score_vertex, dropout_vertex, upscore_vertex])
 
-        # score_conv4 = Conv2D(num_units, (1,1), name='score_conv4', padding='same', activation='relu')(conv4_3)
+            vertex_pred = conv(upscore_vertex, 1, 1, 3 * self.num_classes, 1, 1, name='vertex_pred', relu=False, c_i=128)
+            self.output = vertex_pred
+            self.layers.append(self.output)
 
-        # # score_conv4_p = Lambda(self.backend_debug_print)(score_conv4)  # , output_shape=K.shape(score_conv4)
-        # score_conv4_p = K.print_tensor(score_conv4, "checking if data is being fed")
-
-        # # add_score = Add()([score_conv4, upscore_conv5])
-        # add_score = Add()([score_conv4_p, upscore_conv5])
-
-        # dropout = Dropout(rate, name='dropout')(add_score)
-        
-        # #upscore = deconv(dropout, int(16*scale), int(16*scale), num_units, int(8*scale), int(8*scale), name='upscore', trainable=False)
-        # upscore = Conv2DTranspose(num_units, (int(16*scale), int(16*scale)), strides=(int(8*scale), int(8*scale)), name='upscore', padding='same', data_format="channels_last", trainable=False)(dropout)
-        # print('output shape: ', upscore.get_shape())
-
-        # # 'prob' and 'label_2d' will be added later. 'gt_label_weight' cannot be added because of hard_label C++ module
-
-        # vertex_reg = 1
-        # num_classes = 3
-        # if vertex_reg:
-        #     init_weights = keras.initializers.TruncatedNormal(mean=0.0, stddev=0.001)
-        #     init_bias = keras.initializers.Constant(value=0.)
-        #     regularizer = keras.regularizers.l2(0.0001)
-
-        #     # score_conv5_vertex = Conv2D(128, (1,1), name='score_conv5_vertex', padding='same', activation='relu')(conv5_3)
-        #     score_conv5_vertex = Conv2D(128, (1,1), name='score_conv5_vertex', padding='same', kernel_initializer=init_weights, bias_initializer=init_bias, kernel_regularizer=regularizer, bias_regularizer=regularizer)(conv5_3)
-        #     #   upscore_conv5_vertex = deconv(score_conv5_vertex, 4, 4, 128, 2, 2, name='upscore_conv5_vertex')
-        #     upscore_conv5_vertex = Conv2DTranspose(128, (4, 4), strides=(2, 2), name='upscore_conv5_vertex', padding='same', data_format="channels_last", trainable=False)(score_conv5_vertex)
-
-            
-        #     # score_conv4_vertex = Conv2D(128, (1,1), name='score_conv4_vertex', padding='same', activation='relu')(conv4_3)
-        #     score_conv4_vertex = Conv2D(128, (1,1), name='score_conv4_vertex', padding='same', kernel_initializer=init_weights, bias_initializer=init_bias, kernel_regularizer=regularizer, bias_regularizer=regularizer)(conv4_3)
-            
-        #     add_score_vertex = Add()([score_conv4_vertex, upscore_conv5_vertex])
-        #     dropout_vertex = Dropout(rate, name='dropout_vertex')(add_score_vertex)
-        #     #   upscore_vertex = deconv(dropout_vertex, int(16*scale), int(16*scale), 128, int(8*scale), int(8*scale), name='upscore_vertex', trainable=False)
-        #     upscore_vertex = Conv2DTranspose(128, (int(16*scale), int(16*scale)), strides=(int(8*scale), int(8*scale)), name='upscore_vertex', padding='same', data_format="channels_last", trainable=False)(dropout_vertex)
-            
-        #     # 3*num_classes == depth == # channels-> a fixed output like this 
-        #     # vertex_pred = Conv2D(3*num_classes, (1,1), name='vertex_pred', padding='same', activation='relu')(upscore_vertex)
-        #     # vertex_pred = Conv2D(3*num_classes, (1,1), name='vertex_pred', padding='same', activation='relu', kernel_initializer=init_weights, bias_initializer=init_bias, kernel_regularizer=regularizer, bias_regularizer=regularizer)(upscore_vertex)
-        #     vertex_pred = Conv2D(3*num_classes, (1,1), name='vertex_pred', padding='same', kernel_initializer=init_weights, bias_initializer=init_bias, kernel_regularizer=regularizer, bias_regularizer=regularizer)(upscore_vertex)
-        #     # vertex_pred_after = Activation('relu')(vertex_pred_before)
-        #     # vertex_pred_after = relu(vertex_pred_before)
-            
-        #     # vertex_pred = Conv2D(2*num_classes, (1,1), name='vertex_pred', padding='same', activation='relu')(upscore_vertex)
-        #     # vertex_pred = K.reshape(vertex_pred, (480, 640, 3*num_classes))
-        # # create keras model
-        # self.the_model = Model(inputs=input, outputs=vertex_pred)
-        # # self.the_model = Model(inputs=input, outputs=vertex_pred_after)
-        # # self.__dict__.update(locals())
+        print("layers = ", self.layers)
+        print("model input = ", self.input)
+        print("model output = ", self.output)
 
 
 ############################################################
@@ -436,8 +432,8 @@ def data_generator(data_path=None, shuffle=True, batch_size=1, num_classes=1):
 
 if __name__ == "__main__":
 
-
-    md = vgg16convs_vertex_pred(shape=(480, 640, 3))
+    rgb_shape = (480, 640, 3)
+    md = vgg16convs_vertex_pred(shape=rgb_shape)
 
 
     # # execute only if run as a script
@@ -521,20 +517,27 @@ if __name__ == "__main__":
     # # #     print(grad)
     # # #     get_gradients = K.function(inputs=input_tensors, outputs=grad)
 
-    # num_classes = 3 # including the background as '0'
+    num_classes = 3 # including the background as '0'
 
-    # data_path = '/home/shawnle/Documents/Restore_PoseCNN/PoseCNN-master/data_syn_LOV/data_2_objs/'
-    # # data_path = '/home/shawnle/Documents/Projects/PoseCNN-master/data/LOV/3d_train_data'
-    # dat_gen = data_generator(data_path, num_classes=num_classes)
+    data_path = '/home/shawnle/Documents/Restore_PoseCNN/PoseCNN-master/data_syn_LOV/data_2_objs/'
+    # data_path = '/home/shawnle/Documents/Projects/PoseCNN-master/data/LOV/3d_train_data'
+    dat_gen = data_generator(data_path, num_classes=num_classes)
 
-    # # ypred_shape = mdw.vertex_pred.get_shape()
+    # ypred_shape = mdw.vertex_pred.get_shape()
     # ypred_shape = mdw.the_model.output_shape
     # print('ypred_shape: ', ypred_shape)
     # ytrue = tf.placeholder(tf.float32, shape=(None, ypred_shape[1], ypred_shape[2], ypred_shape[3]*2), name='ytrue')
+
+    print(md.layers[-1].shape)
+    vertex_targets = tf.placeholder(tf.float32, shape=md.layers[-1].shape)
+    print("vtt shape = ", vertex_targets.shape)
+    vertex_weights = tf.placeholder(tf.float32, shape=md.layers[-1].shape)
     
-    # # total_loss = mdw.smooth_l1_loss_vertex(ytrue, mdw.vertex_pred)
-    # total_loss = mdw.smooth_l1_loss_vertex(ytrue, mdw.the_model.layers[-1].output)
-    # optimizer = tf.train.MomentumOptimizer(0.001, 0.).minimize(total_loss)
+    print(type(md.layers[-1]))
+    print(type(vertex_targets))
+    # total_loss = mdw.smooth_l1_loss_vertex(ytrue, mdw.vertex_pred)
+    total_loss = md.smooth_l1_loss_vertex(md.layers[-1], vertex_targets, vertex_weights)
+    optimizer = tf.train.MomentumOptimizer(0.001, 0.).minimize(total_loss)
     
     # with tf.Session() as sess:
     #     # tf.initializers.global_variables()
