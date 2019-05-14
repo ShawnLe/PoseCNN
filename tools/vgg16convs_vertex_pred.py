@@ -195,9 +195,6 @@ class vgg16convs_vertex_pred():
 
         sigma_2 = sigma ** 2
 
-        print('vt type:', type(vertex_pred))
-        print("vt pr ", vertex_pred.shape, type(vertex_pred))
-        print("vtt ", vertex_targets.shape, type(vertex_targets))
         vertex_diff = vertex_pred - vertex_targets
         diff = tf.multiply(vertex_weights, vertex_diff)
         abs_diff = tf.abs(diff)
@@ -387,7 +384,7 @@ def data_generator(data_path=None, shuffle=True, batch_size=1, num_classes=1):
     index = -1
     dataset_indexes = prepare_dataset_indexes(data_path)
 
-    # print len(dataset_indexes)
+    print ('dataset size = ' + str(len(dataset_indexes)))
     while True:
 
         if b == 0:
@@ -417,8 +414,8 @@ def data_generator(data_path=None, shuffle=True, batch_size=1, num_classes=1):
 
         if b >= batch_size:
             inputs = [batch_rgb]
-            # outputs = [batch_center]
-            outputs = [np.concatenate([batch_center, batch_center_weight], -1)]
+            outputs = [batch_center, batch_center_weight]
+            # outputs = [np.concatenate([batch_center, batch_center_weight], -1)]
 
             b = 0
 
@@ -519,9 +516,11 @@ if __name__ == "__main__":
 
     num_classes = 3 # including the background as '0'
 
-    data_path = '/home/shawnle/Documents/Restore_PoseCNN/PoseCNN-master/data_syn_LOV/data_2_objs/'
+    batch_size = 10
+
+    data_path = '/home/shawnle/Documents/Restore_PoseCNN/PoseCNN-master/data_syn_LOV/data_2_objs/small'
     # data_path = '/home/shawnle/Documents/Projects/PoseCNN-master/data/LOV/3d_train_data'
-    dat_gen = data_generator(data_path, num_classes=num_classes)
+    dat_gen = data_generator(data_path, num_classes=num_classes, batch_size=batch_size)
 
     # ypred_shape = mdw.vertex_pred.get_shape()
     # ypred_shape = mdw.the_model.output_shape
@@ -538,33 +537,47 @@ if __name__ == "__main__":
     # total_loss = mdw.smooth_l1_loss_vertex(ytrue, mdw.vertex_pred)
     total_loss = md.smooth_l1_loss_vertex(md.layers[-1], vertex_targets, vertex_weights)
     optimizer = tf.train.MomentumOptimizer(0.001, 0.).minimize(total_loss)
-    
-    # with tf.Session() as sess:
-    #     # tf.initializers.global_variables()
-    #     tf.global_variables_initializer()
-    #     for i in range(20):
-    #         for step in range(10):
-    #             inp, out = next(dat_gen)
 
-    #             # print('length of inp: ', inp[0].shape, out[0].shape)
-    #             if len(inp) == 0: 
-    #                 print("empty data. Continue..")
-    #                 continue
+    config = tf.ConfigProto()
+    config.gpu_options.per_process_gpu_memory_fraction = 0.7
+    # config.gpu_options.allow_growth = True
+    config.allow_soft_placement=True
 
-    #             feed_dict = { input : inp[0],
-    #                           ytrue: out[0]
-    #                         #  mdw.the_model.targets[0] : np.ones(shape=((1,480,640,9)), dtype=np.float32),
-    #                         #  mdw.the_model.sample_weights[0] : np.ones((1), dtype=np.float32),
-    #                         #  'dropout/keras_learning_phase:0' : 0                 
-    #             }
+    iter = 0
+    total_step = int(200 / batch_size)
+    print("total step per epoch = ", total_step)
+    with tf.Session(config=config) as sess:
 
-    #             _, loss, inp_tensor = sess.run([optimizer, total_loss, input], 
-    #                                         feed_dict= feed_dict)#{input: inp[0], mdw.the_model.output: out[0][...,:9], ytrue: out[0]})
-    #             # print('let\'s assume ', loss, inp_tensor.shape)
-    # # # mode = 'INFERENCE'
-    # print('-------------------------------------')
-    # print('it passes the sess run......')
-    # mode = 'TRAIN'
+        run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
+        run_metadata = tf.RunMetadata()
+
+        sess.run(tf.global_variables_initializer(), options=run_options, run_metadata=run_metadata)
+
+        for epoch in range(1):
+            for step in range(total_step):
+                inp, out = next(dat_gen)
+
+                # print('len/shape inp/out: ', len(inp), len(out), inp[0].shape, out[0].shape, out[1].shape)
+                if len(inp) == 0: 
+                    print("empty data. Continue..")
+                    continue
+
+                feed_dict = { md.input : inp[0],
+                              vertex_targets: out[0],
+                              vertex_weights: out[1]
+                            #  mdw.the_model.targets[0] : np.ones(shape=((1,480,640,9)), dtype=np.float32),
+                            #  mdw.the_model.sample_weights[0] : np.ones((1), dtype=np.float32),
+                            #  'dropout/keras_learning_phase:0' : 0                 
+                }
+
+                _, loss = sess.run([optimizer, total_loss], feed_dict= feed_dict, options=run_options, run_metadata=run_metadata)#{input: inp[0], mdw.the_model.output: out[0][...,:9], ytrue: out[0]})
+                print('iter ' + str(iter) + '/' + str(epoch) + ': --> loss:', loss)
+                iter = iter + 1
+
+    # # mode = 'INFERENCE'
+    print('-------------------------------------')
+    print('it passes the sess run......')
+    mode = 'TRAIN'
     
     # # # get weights from pre-trained model
     # # test_model = load_model('my_model.h5')
