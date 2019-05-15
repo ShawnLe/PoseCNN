@@ -18,6 +18,8 @@ from fcn.config import cfg
 
 from numpy import linalg as LA
 
+from utils.blob import chromatic_transform
+
 
 ############################################################
 #  layer library
@@ -178,11 +180,51 @@ class vgg16convs_vertex_pred():
         self.num_classes = 3
 
         self.layers = []
+        self.layer_dict = dict()
         self.layers.append(self.input)
 
         # print("layers = ", self.layers)
 
         self.build()
+
+        self.tensorboard_rep()
+
+    def tensorboard_rep(self):
+
+        print("[tensorboard_rep] running...")
+        rep_list = ['vertex_pred', 'add_score_vertex', 'score_conv4_vertex', 'score_conv5_vertex', 'conv5_3', 'conv4_3']
+
+        with tf.name_scope('summaries') as self.scope:
+            # for rep in rep_list:
+            shape = self.layer_dict['vertex_pred'].shape
+            tf.summary.image('vertex_pred', tf.slice(self.layer_dict['vertex_pred'], [0,0,0,3], [1, shape[1], shape[2], 1]))
+            tf.summary.scalar('vertex_pred_max', tf.math.reduce_max(self.layer_dict['vertex_pred']))
+            tf.summary.scalar('vertex_pred_min', tf.math.reduce_min(self.layer_dict['vertex_pred']))
+                    
+            shape = self.layer_dict['add_score_vertex'].shape
+            tf.summary.image('add_score_vertex', tf.slice(self.layer_dict['add_score_vertex'], [0,0,0,0], [1, shape[1], shape[2], 1]))
+            tf.summary.scalar('add_score_vertex_max', tf.math.reduce_max(self.layer_dict['add_score_vertex']))
+            tf.summary.scalar('add_score_vertex_min', tf.math.reduce_min(self.layer_dict['add_score_vertex']))
+
+            shape = self.layer_dict['score_conv4_vertex'].shape
+            tf.summary.image('score_conv4_vertex', tf.slice(self.layer_dict['score_conv4_vertex'], [0, 0, 0, 0], [1, shape[1], shape[2], 1]))
+            tf.summary.scalar('score_conv4_vertex_max', tf.math.reduce_max(self.layer_dict['score_conv4_vertex']))
+            tf.summary.scalar('score_conv4_vertex_min', tf.math.reduce_min(self.layer_dict['score_conv4_vertex']))
+
+            shape = self.layer_dict['score_conv5_vertex'].shape
+            tf.summary.image('score_conv5_vertex', tf.slice(self.layer_dict['score_conv5_vertex'], [0, 0, 0, 0], [1, shape[1], shape[2], 1]))
+            tf.summary.scalar('score_conv5_vertex_max', tf.math.reduce_max(self.layer_dict['score_conv5_vertex']))
+            tf.summary.scalar('score_conv5_vertex_min', tf.math.reduce_min(self.layer_dict['score_conv5_vertex']))
+
+
+            shape = self.layer_dict['conv5_3'].shape
+            tf.summary.image('conv5_3', tf.slice(self.layer_dict['conv5_3'], [0,0,0,0], [1, shape[1], shape[2], 1]))
+            tf.summary.scalar('conv5_3_max', tf.math.reduce_max(self.layer_dict['conv5_3']))
+            tf.summary.scalar('conv5_3_min', tf.math.reduce_min(self.layer_dict['conv5_3']))
+
+
+            shape = self.layer_dict['conv4_3'].shape
+            tf.summary.image('conv4_3', tf.slice(self.layer_dict['conv4_3'], [0,0,0,0], [1, shape[1], shape[2], 1]))
 
     def backend_debug_print(self, x):
         K.print_tensor(x, message='hello_print') # , [tf.shape(x)]
@@ -211,61 +253,91 @@ class vgg16convs_vertex_pred():
         conv1_2 = conv(conv1_1, 3, 3, 64, 1, 1, name='conv1_2', c_i=64, trainable=self.trainable)
         pool1 = max_pool(conv1_2, 2, 2, 2, 2, name='pool1')
         self.layers.append([conv1_1, conv1_2, pool1])
+        self.layer_dict['conv1_1'] = conv1_1
+        self.layer_dict['conv1_2'] = conv1_2
+        self.layer_dict['pool1'] = pool1
 
         conv2_1 = conv(pool1, 3, 3, 128, 1, 1, name='conv2_1', c_i=64, trainable=self.trainable)
         conv2_2 = conv(conv2_1, 3, 3, 128, 1, 1, name='conv2_2', c_i=128, trainable=self.trainable)
         pool2 = max_pool(conv2_2, 2, 2, 2, 2, name='pool2')
         self.layers.append([conv2_1, conv2_2, pool2])
+        self.layer_dict['conv2_1'] = conv2_1
+        self.layer_dict['conv2_2'] = conv2_2
+        self.layer_dict['pool2'] = pool2
 
         conv3_1 = conv(pool2, 3, 3, 256, 1, 1, name='conv3_1', c_i=128, trainable=self.trainable)
         conv3_2 = conv(conv3_1, 3, 3, 256, 1, 1, name='conv3_2', c_i=256, trainable=self.trainable)
         conv3_3 = conv(conv3_2, 3, 3, 256, 1, 1, name='conv3_3', c_i=256, trainable=self.trainable)
         pool3 = max_pool(conv3_3, 2, 2, 2, 2, name='pool3')
         self.layers.append([conv3_1, conv3_2, conv3_3, pool3])
+        self.layer_dict['conv3_1'] = conv3_1
+        self.layer_dict['conv3_2'] = conv3_2
+        self.layer_dict['conv3_3'] = conv3_3
+        self.layer_dict['pool3'] = pool3
 
         conv4_1 = conv(pool3, 3, 3, 512, 1, 1, name='conv4_1', c_i=256, trainable=self.trainable)
         conv4_2 = conv(conv4_1, 3, 3, 512, 1, 1, name='conv4_2', c_i=512, trainable=self.trainable)
         conv4_3 = conv(conv4_2, 3, 3, 512, 1, 1, name='conv4_3', c_i=512, trainable=self.trainable)
         pool4 = max_pool(conv4_3, 2, 2, 2, 2, name='pool4')
         self.layers.append([conv4_1, conv4_2, conv4_3, pool4])
+        self.layer_dict['conv4_1'] = conv4_1
+        self.layer_dict['conv4_2'] = conv4_2
+        self.layer_dict['conv4_3'] = conv4_3
+        self.layer_dict['pool4'] = pool4
 
         conv5_1 = conv(pool4, 3, 3, 512, 1, 1, name='conv5_1', c_i=512, trainable=self.trainable)
         conv5_2 = conv(conv5_1, 3, 3, 512, 1, 1, name='conv5_2', c_i=512, trainable=self.trainable)
         conv5_3 = conv(conv5_2, 3, 3, 512, 1, 1, name='conv5_3', c_i=512, trainable=self.trainable)
         self.layers.append([conv5_1, conv5_2, conv5_3])
+        self.layer_dict['conv5_1'] = conv5_1
+        self.layer_dict['conv5_2'] = conv5_2
+        self.layer_dict['conv5_3'] = conv5_3
 
         score_conv5 = conv(conv5_3, 1, 1, self.num_units, 1, 1, name='score_conv5', c_i=512)
         upscore_conv5 = deconv(score_conv5, 4, 4, self.num_units, 2, 2, name='upscore_conv5', trainable=False)
         self.layers.append([score_conv5, upscore_conv5])
+        self.layer_dict['score_conv5'] = score_conv5
+        self.layer_dict['upscore_conv5'] = upscore_conv5
 
         score_conv4 = conv(conv4_3, 1, 1, self.num_units, 1, 1, name='score_conv4', c_i=512)
+        self.layer_dict['score_conv4'] = score_conv4
 
         add_score = add([score_conv4, upscore_conv5], name='add_score')
         dropout_ = dropout(add_score, self.keep_prob_queue, name='dropout')
         upscore = deconv(dropout_, int(16*self.scale), int(16*self.scale), self.num_units, int(8*self.scale), int(8*self.scale), name='upscore', trainable=False)
         self.layers.append([score_conv4, add_score, dropout_, upscore])
+        self.layer_dict['add_score'] = add_score
+        self.layer_dict['dropout'] = dropout_
+        self.layer_dict['upscore'] = upscore
 
         if self.vertex_reg : 
             score_conv5_vertex = conv(conv5_3, 1, 1, 128, 1, 1, name='score_conv5_vertex', relu=False, c_i=512)
             upscore_conv5_vertex = deconv(score_conv5_vertex, 4, 4, 128, 2, 2, name='upscore_conv5_vertex', trainable=False)
             self.layers.append([score_conv5_vertex, upscore_conv5_vertex])
+            self.layer_dict['score_conv5_vertex'] = score_conv5_vertex
 
             score_conv4_vertex = conv(conv4_3, 1, 1, 128, 1, 1, name='score_conv4_vertex', relu=False, c_i=512)
             self.layers.append(score_conv4_vertex)
+            self.layer_dict['score_conv4_vertex'] = score_conv4_vertex
 
             add_score_vertex = add([score_conv4_vertex, upscore_conv5_vertex], name='add_score_vertex')
             dropout_vertex = dropout(add_score_vertex, self.keep_prob_queue, name='dropout_vertex')
             upscore_vertex = deconv(dropout_vertex, int(16*self.scale), int(16*self.scale), 128, int(8*self.scale), int(8*self.scale), name='upscore_vertex', trainable=False)
             self.layers.append([add_score_vertex, dropout_vertex, upscore_vertex])
+            self.layer_dict['add_score_vertex'] = add_score_vertex            
+            self.layer_dict['dropout_vertex'] = dropout_vertex    
+            self.layer_dict['upscore_vertex'] = upscore_vertex
 
             vertex_pred = conv(upscore_vertex, 1, 1, 3 * self.num_classes, 1, 1, name='vertex_pred', relu=False, c_i=128)
             self.output = vertex_pred
             self.layers.append(self.output)
+            self.layer_dict['vertex_pred'] = vertex_pred
 
         for l, i in enumerate(self.layers, 0):
             print("layers " + str(l) + " " + str(i))
         print("model input = ", self.input)
         print("model output = ", self.output)
+        print("layers dict: ", self.layer_dict)
 
 
 ############################################################
@@ -358,7 +430,11 @@ def get_a_sample(data_path=None, shuffle=True, batch_size=1, num_classes=1):
     rgb_raw = pad_im(cv2.imread(data_rec["color"], cv2.IMREAD_UNCHANGED), 16)
     cv2.imwrite("rgb_raw.png",rgb_raw)
 
+    if cfg.TRAIN.CHROMATIC:
+        rgb = chromatic_transform(rgb)
+
     rgb = rgb_raw.astype(np.float32, copy=True)
+    rgb -= cfg.PIXEL_MEANS
     mat = loadmat(data_rec["meta"])
     im_lbl = pad_im(cv2.imread(data_rec['label'], cv2.IMREAD_UNCHANGED), 16)
 
@@ -401,7 +477,12 @@ def data_generator(data_path=None, shuffle=True, batch_size=1, num_classes=1):
         data_rec = dataset_indexes[index]
 
         rgb_raw = pad_im(cv2.imread(data_rec["color"], cv2.IMREAD_UNCHANGED), 16)
+
+        if cfg.TRAIN.CHROMATIC:
+            rgb_raw = chromatic_transform(rgb_raw)
+
         rgb = rgb_raw.astype(np.float32, copy=True)
+        rgb -= cfg.PIXEL_MEANS
         mat = loadmat(data_rec["meta"])
         im_lbl = pad_im(cv2.imread(data_rec['label'], cv2.IMREAD_UNCHANGED), 16)
 
@@ -435,7 +516,7 @@ if __name__ == "__main__":
 
     num_classes = 3 # including the background as '0'
 
-    batch_size = 10
+    batch_size = 1
 
     data_path = '/home/shawnle/Documents/Restore_PoseCNN/PoseCNN-master/data_syn_LOV/data_2_objs/small'
     # data_path = '/home/shawnle/Documents/Projects/PoseCNN-master/data/LOV/3d_train_data'
@@ -453,13 +534,25 @@ if __name__ == "__main__":
     total_loss = md.smooth_l1_loss_vertex(md.layers[-1], vertex_targets, vertex_weights)
     optimizer = tf.train.MomentumOptimizer(0.001, 0.9).minimize(total_loss)
 
+    ########### tensorboard reports
+    # with tf.name_scope('summaries'):
+    with tf.name_scope(md.scope):
+        tf.summary.scalar('total_loss', total_loss)
+        tf.summary.image('rgb_input', md.input)
+
+    merged = tf.summary.merge_all()
+    writer = tf.summary.FileWriter('.')
+    writer.add_graph(tf.get_default_graph())
+    writer.flush()
+
     config = tf.ConfigProto()
     config.gpu_options.per_process_gpu_memory_fraction = 0.7
     # config.gpu_options.allow_growth = True
     config.allow_soft_placement=True
+    ########### tensorboard reports
 
     iter = 0
-    total_step = int(200 / batch_size)
+    total_step = int(1 / batch_size)
     print("total step per epoch = ", total_step)
     with tf.Session(config=config) as sess:
 
@@ -468,7 +561,7 @@ if __name__ == "__main__":
 
         sess.run(tf.global_variables_initializer(), options=run_options, run_metadata=run_metadata)
 
-        for epoch in range(1):
+        for epoch in range(1000):
             for step in range(total_step):
                 inp, out = next(dat_gen)
 
@@ -482,7 +575,9 @@ if __name__ == "__main__":
                               vertex_weights: out[1]
                 }
 
-                _, loss, mdinp, mdact, mdact1, out_val, vertex_diff = sess.run([optimizer, total_loss, md.input, md.layers[8][0], md.layers[9][0], md.output, md.output -vertex_targets], feed_dict= feed_dict, options=run_options, run_metadata=run_metadata)
+                _, summary, loss, mdinp, mdact, mdact1, out_val, vertex_diff = sess.run([optimizer, merged, total_loss, md.input, md.layers[8][0], md.layers[9][0], md.output, md.output -vertex_targets], feed_dict= feed_dict, options=run_options, run_metadata=run_metadata)
+
+                writer.add_summary(summary, epoch)
 
                 np.save('mdinp_'+ str(iter) +'.npy', mdinp)
                 np.save('mdact_'+ str(iter) +'.npy', mdact)
@@ -492,3 +587,4 @@ if __name__ == "__main__":
 
                 print('iter ' + str(iter) + '/' + str(epoch) + ': --> loss:', loss)
                 iter = iter + 1
+
