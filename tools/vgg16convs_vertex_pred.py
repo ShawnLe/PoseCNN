@@ -174,7 +174,7 @@ class vgg16convs_vertex_pred():
         self.input = tf.placeholder(tf.float32, shape=[None, shape[0], shape[1], shape[2]])
         self.trainable = trainable
         self.num_units = 64
-        self.keep_prob_queue = 0.5
+        self.keep_prob_queue = 1. #0.5
         self.scale = 1.
         self.vertex_reg = 1
         self.num_classes = 3
@@ -299,6 +299,14 @@ class vgg16convs_vertex_pred():
             tensor_img = self.make_tensor_img(tf.slice(self.layer_dict['conv5_2'], [0,0,0,0], [1, shape[1], shape[2], 1]))
             tf.summary.image('conv5_2', tensor_img)
 
+            shape = self.layer_dict['upscore_vertex_conv'].shape
+            tensor_img = self.make_tensor_img(tf.slice(self.layer_dict['upscore_vertex_conv'], [0,0,0,0], [1, shape[1], shape[2], 1]))
+            tf.summary.image('upscore_vertex_conv', tensor_img)
+
+            shape = self.layer_dict['upscore_vertex_conv1'].shape
+            tensor_img = self.make_tensor_img(tf.slice(self.layer_dict['upscore_vertex_conv1'], [0,0,0,0], [1, shape[1], shape[2], 1]))
+            tf.summary.image('upscore_vertex_conv1', tensor_img)
+
 
     def backend_debug_print(self, x):
         K.print_tensor(x, message='hello_print') # , [tf.shape(x)]
@@ -385,24 +393,37 @@ class vgg16convs_vertex_pred():
         self.layer_dict['upscore'] = upscore
 
         if self.vertex_reg : 
-            score_conv5_vertex = conv(conv5_3, 1, 1, 128, 1, 1, name='score_conv5_vertex', relu=False, c_i=512)
+            score_conv5_vertex = conv(conv5_3, 1, 1, 128, 1, 1, name='score_conv5_vertex', relu=True, c_i=512)
             upscore_conv5_vertex = deconv(score_conv5_vertex, 4, 4, 128, 2, 2, name='upscore_conv5_vertex', trainable=False)
             self.layers.append([score_conv5_vertex, upscore_conv5_vertex])
             self.layer_dict['score_conv5_vertex'] = score_conv5_vertex
 
-            score_conv4_vertex = conv(conv4_3, 1, 1, 128, 1, 1, name='score_conv4_vertex', relu=False, c_i=512)
+            score_conv4_vertex = conv(conv4_3, 1, 1, 128, 1, 1, name='score_conv4_vertex', relu=True, c_i=512)
             self.layers.append(score_conv4_vertex)
             self.layer_dict['score_conv4_vertex'] = score_conv4_vertex
 
             add_score_vertex = add([score_conv4_vertex, upscore_conv5_vertex], name='add_score_vertex')
-            dropout_vertex = dropout(add_score_vertex, self.keep_prob_queue, name='dropout_vertex')
-            upscore_vertex = deconv(dropout_vertex, int(16*self.scale), int(16*self.scale), 128, int(8*self.scale), int(8*self.scale), name='upscore_vertex', trainable=False)
+            dropout_vertex = dropout(add_score_vertex, keep_prob=self.keep_prob_queue, name='dropout_vertex')
+
+            upscore_vertex = deconv(dropout_vertex, int(4*self.scale), int(4*self.scale), 128, int(2*self.scale), int(2*self.scale), name='upscore_vertex', trainable=False)
+            # upscore_vertex = deconv(dropout_vertex, int(16*self.scale), int(16*self.scale), 128, int(8*self.scale), int(8*self.scale), name='upscore_vertex', trainable=False)
+            upscore_vertex_conv = conv(upscore_vertex, 1, 1, 128, 1, 1, name='upscore_vertex_conv', relu=False, c_i=128)
+            upscore_vertex1 = deconv(upscore_vertex_conv, int(4*self.scale), int(4*self.scale), 128, int(2*self.scale), int(2*self.scale), name='upscore_vertex1', trainable=False)
+            upscore_vertex_conv1 = conv(upscore_vertex1, 1, 1, 128, 1, 1, name='upscore_vertex_conv1', relu=False, c_i=128)
+            upscore_vertex2 = deconv(upscore_vertex_conv1, int(4*self.scale), int(4*self.scale), 128, int(2*self.scale), int(2*self.scale), name='upscore_vertex2', trainable=False)
+            # upscore_vertex_conv2 = conv(upscore_vertex2, 1, 1, 128, 1, 1, name='upscore_vertex_conv2', relu=False, c_i=128)
+
             self.layers.append([add_score_vertex, dropout_vertex, upscore_vertex])
             self.layer_dict['add_score_vertex'] = add_score_vertex            
             self.layer_dict['dropout_vertex'] = dropout_vertex    
             self.layer_dict['upscore_vertex'] = upscore_vertex
+            self.layer_dict['upscore_vertex1'] = upscore_vertex1
+            self.layer_dict['upscore_vertex2'] = upscore_vertex2
+            self.layer_dict['upscore_vertex_conv'] = upscore_vertex_conv
+            self.layer_dict['upscore_vertex_conv1'] = upscore_vertex_conv1
 
-            vertex_pred = conv(upscore_vertex, 1, 1, 3 * self.num_classes, 1, 1, name='vertex_pred', relu=False, c_i=128)
+            # vertex_pred = conv(upscore_vertex, 1, 1, 3 * self.num_classes, 1, 1, name='vertex_pred', relu=False, c_i=128)
+            vertex_pred = conv(upscore_vertex2, 1, 1, 3 * self.num_classes, 1, 1, name='vertex_pred', relu=False, c_i=128)
             self.output = vertex_pred
             self.layers.append(self.output)
             self.layer_dict['vertex_pred'] = vertex_pred
@@ -586,21 +607,21 @@ def data_generator(data_path=None, shuffle=True, batch_size=1, num_classes=1):
 if __name__ == "__main__":
 
     rgb_shape = (480, 640, 3)
-    md = vgg16convs_vertex_pred(shape=rgb_shape)
+    md = vgg16convs_vertex_pred(shape=rgb_shape, trainable=False)
 
     num_classes = 3 # including the background as '0'
 
     batch_size = 1
 
-    data_path = '/home/shawnle/Documents/Restore_PoseCNN/PoseCNN-master/data_syn_LOV/data_2_objs/small'
-    # data_path = '/home/shawnle/Documents/Projects/PoseCNN-master/data/LOV/3d_train_data'
+    # data_path = '/home/shawnle/Documents/Restore_PoseCNN/PoseCNN-master/data_syn_LOV/data_2_objs/small'
+    data_path = '/home/shawnle/Documents/Projects/PoseCNN-master/data/LOV/3d_train_data/small'
     dat_gen = data_generator(data_path, num_classes=num_classes, batch_size=batch_size)
 
     print('activation layer = ', md.layers[-4])
     print(md.layers[-1].shape)
-    vertex_targets = tf.placeholder(tf.float32, shape=md.layers[-1].shape)
+    vertex_targets = tf.placeholder(tf.float32, shape=md.layers[-1].shape, name='vertex_targets')
     print("vtt shape = ", vertex_targets.shape)
-    vertex_weights = tf.placeholder(tf.float32, shape=md.layers[-1].shape)
+    vertex_weights = tf.placeholder(tf.float32, shape=md.layers[-1].shape, name='vertex_weights')
     
     print(type(md.layers[-1]))
     print(type(vertex_targets))
@@ -635,7 +656,7 @@ if __name__ == "__main__":
 
         sess.run(tf.global_variables_initializer(), options=run_options, run_metadata=run_metadata)
 
-        for epoch in range(20):
+        for epoch in range(1000):
             for step in range(total_step):
                 inp, out = next(dat_gen)
 
@@ -653,11 +674,11 @@ if __name__ == "__main__":
 
                 writer.add_summary(summary, epoch)
 
-                np.save('mdinp_'+ str(iter) +'.npy', mdinp)
-                np.save('mdact_'+ str(iter) +'.npy', mdact)
-                np.save('mdact1_'+ str(iter) +'.npy', mdact1)
-                np.save('out_val_'+ str(iter) +'.npy', out_val)
-                np.save('vertex_diff_' + str(iter) + '.npy', vertex_diff)
+                # np.save('mdinp_'+ str(iter) +'.npy', mdinp)
+                # np.save('mdact_'+ str(iter) +'.npy', mdact)
+                # np.save('mdact1_'+ str(iter) +'.npy', mdact1)
+                # np.save('out_val_'+ str(iter) +'.npy', out_val)
+                # np.save('vertex_diff_' + str(iter) + '.npy', vertex_diff)
 
                 print('iter ' + str(iter) + '/' + str(epoch) + ': --> loss:', loss)
                 iter = iter + 1
