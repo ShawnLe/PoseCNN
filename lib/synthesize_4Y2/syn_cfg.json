@@ -1,5 +1,5 @@
 {
-"num_images": 1000,
+"num_images": 100,
 "num_keypoints": 10,
 "sel_random_points": true,
 "random_background": false,
@@ -17,5 +17,6 @@
         [0.02269, -0.01234, -0.01407],
         [-0.00404, -0.04642, 0.00997]
       ],
-"num_instances": [3, 3, 3]
+"num_instances": [3, 3, 3],
+"factor_depth": 10000.0
 }

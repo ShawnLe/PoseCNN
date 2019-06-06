@@ -438,7 +438,7 @@ void Synthesizer::initializeBuffers(int model_index, aiMesh* assimpMesh, std::st
 }
 
 
-void Synthesizer::render_python(int width, int height, np::ndarray const & parameters, 
+void Synthesizer::render_python(int width, int height, np::ndarray const & parameters, np::ndarray const & num_instances,
   np::ndarray const & color, np::ndarray const & depth, np::ndarray const & vertmap, np::ndarray const & class_indexes, 
   np::ndarray const & poses_return, np::ndarray const & centers_return, bool is_sampling, bool is_sampling_pose)
 {
@@ -455,13 +455,14 @@ void Synthesizer::render_python(int width, int height, np::ndarray const & param
   float tfar = meta[7];
 
   render(width, height, fx, fy, px, py, znear, zfar, tnear, tfar,
+    reinterpret_cast<float*>(num_instances.get_data()),
     reinterpret_cast<float*>(color.get_data()), reinterpret_cast<float*>(depth.get_data()),
     reinterpret_cast<float*>(vertmap.get_data()), reinterpret_cast<float*>(class_indexes.get_data()),
     reinterpret_cast<float*>(poses_return.get_data()), reinterpret_cast<float*>(centers_return.get_data()), is_sampling, is_sampling_pose);
 }
 
 
-void Synthesizer::render(int width, int height, float fx, float fy, float px, float py, float znear, float zfar, float tnear, float tfar, 
+void Synthesizer::render(int width, int height, float fx, float fy, float px, float py, float znear, float zfar, float tnear, float tfar, float* num_instances,
               float* color, float* depth, float* vertmap, float* class_indexes, float *poses_return, float* centers_return,
               bool is_sampling, bool is_sampling_pose)
 {
@@ -483,118 +484,107 @@ void Synthesizer::render(int width, int height, float fx, float fy, float px, fl
   std::vector<int> class_ids;
 
   printf("num_classes = %d\n", num_classes);
-  is_sampling = false;
-  if (is_sampling)
-  {
-    // sample object classes
-    num = irand(5, 8);
-    for (int i = 0; i < num; )
-    {
-      int class_id = irand(0, num_classes);
-      int flag = 1;
-      for (int j = 0; j < i; j++)
-      {
-        if(class_id == class_ids[j])
-        {
-          flag = 0;
-          break;
-        }
-      }
-      if (flag)
-      {
-        class_ids.push_back(class_id);
-        i++;
-      }
-    }
-  }
-  else
-  {
-    printf("[Synthesizer::render] is_sampling is FALSE.\n");
+  printf("num_instances = %f %f %f\n", num_instances[0], num_instances[1], num_instances[2]);
+  int sum_num_inst = 0;
+  for (int i=0; i<num_classes; i++) 
+    sum_num_inst = sum_num_inst + num_instances[i];
 
-    num = num_classes;
-    for (int i = 0; i < num_classes; i++)
-      class_ids.push_back(i);
-  }
+  num = num_classes;
+  for (int i = 0; i < num_classes; i++)
+    class_ids.push_back(i);
   printf("num = %d\n", num);
 
   if (class_indexes)
   {
+    int inst = 0;
     for (int i = 0; i < num; i++)
-      class_indexes[i] = class_ids[i];
+      for (int j = 0; j < num_instances[i]; j++) 
+      {
+        class_indexes[inst] = class_ids[i];
+        inst++;
+      }
   }
 
   // store the poses
-  std::vector<Sophus::SE3d> poses(num);
+  // std::vector<Sophus::SE3d> poses(num);
+  std::vector<Sophus::SE3d> poses(sum_num_inst);
 
+  int cnt = 0;
   for (int i = 0; i < num; i++)
   {
     int class_id = class_ids[i];
 
-    while(1)
+    for (int j = 0; j < num_instances[i]; j++) 
     {
-      // sample a pose
-      Eigen::Quaterniond quaternion;
-      Sophus::SE3d::Point translation;
-      if (is_sampling_pose)
+      while(1)
       {
-        int seed = irand(0, pose_nums_[class_id]);
-        float* pose = poses_[class_id] + seed * 7;
-        quaternion.w() = pose[0] + drand(-0.2, 0.2);
-        quaternion.x() = pose[1] + drand(-0.2, 0.2);
-        quaternion.y() = pose[2] + drand(-0.2, 0.2);
-        quaternion.z() = pose[3] + drand(-0.2, 0.2);
-        translation(0) = pose[4] + drand(-0.1, 0.1);
-        translation(1) = pose[5] + drand(-0.1, 0.1);
-        translation(2) = pose[6] + drand(-0.1, 0.1);
-      }
-      else
-      {
-        double roll = drand(0, 360);
-        double pitch = drand(0, 360);
-        double yaw = drand(0, 360);
-        Eigen::Quaterniond q = Eigen::AngleAxisd(roll * M_PI / 180.0, Eigen::Vector3d::UnitX())
-                             * Eigen::AngleAxisd(pitch * M_PI / 180.0, Eigen::Vector3d::UnitY())
-                             * Eigen::AngleAxisd(yaw * M_PI / 180.0, Eigen::Vector3d::UnitZ());
-
-        quaternion.w() = q.w();
-        quaternion.x() = q.x();
-        quaternion.y() = q.y();
-        quaternion.z() = q.z();
-        translation(0) = drand(-0.1, 0.1);
-        translation(1) = drand(-0.1, 0.1);
-        translation(2) = drand(tnear, tfar);
-      }
-      const Sophus::SE3d T_co(quaternion, translation);
-
-      int flag = 1;
-      for (int j = 0; j < i; j++)
-      {
-        Sophus::SE3d::Point T = poses[j].translation() - translation;
-        double d = T.norm();
-        if (d < threshold)
+        // sample a pose
+        Eigen::Quaterniond quaternion;
+        Sophus::SE3d::Point translation;
+        if (is_sampling_pose)
         {
-          flag = 0;
+          int seed = irand(0, pose_nums_[class_id]);
+          float* pose = poses_[class_id] + seed * 7;
+          quaternion.w() = pose[0] + drand(-0.2, 0.2);
+          quaternion.x() = pose[1] + drand(-0.2, 0.2);
+          quaternion.y() = pose[2] + drand(-0.2, 0.2);
+          quaternion.z() = pose[3] + drand(-0.2, 0.2);
+          translation(0) = pose[4] + drand(-0.1, 0.1);
+          translation(1) = pose[5] + drand(-0.1, 0.1);
+          translation(2) = pose[6] + drand(-0.1, 0.1);
+        }
+        else
+        {
+          double roll = drand(0, 360);
+          double pitch = drand(0, 360);
+          double yaw = drand(0, 360);
+          Eigen::Quaterniond q = Eigen::AngleAxisd(roll * M_PI / 180.0, Eigen::Vector3d::UnitX())
+                              * Eigen::AngleAxisd(pitch * M_PI / 180.0, Eigen::Vector3d::UnitY())
+                              * Eigen::AngleAxisd(yaw * M_PI / 180.0, Eigen::Vector3d::UnitZ());
+
+          quaternion.w() = q.w();
+          quaternion.x() = q.x();
+          quaternion.y() = q.y();
+          quaternion.z() = q.z();
+          translation(0) = drand(-0.2, 0.2);
+          translation(1) = drand(-0.2, 0.2);
+          translation(2) = drand(tnear, tfar);
+        }
+        const Sophus::SE3d T_co(quaternion, translation);
+
+        // pose condition is not too close with an already-selected pose
+        int flag = 1;
+        for (int k = 0; k < cnt; k++)
+        {
+          Sophus::SE3d::Point T = poses[k].translation() - translation;
+          double d = T.norm();
+          if (d < threshold)
+          {
+            flag = 0;
+            break;
+          }
+        }
+
+        if (flag)
+        {
+          poses[cnt] = T_co;
+          if (poses_return)
+          {
+            poses_return[cnt * 7 + 0] = quaternion.w();
+            poses_return[cnt * 7 + 1] = quaternion.x();
+            poses_return[cnt * 7 + 2] = quaternion.y();
+            poses_return[cnt * 7 + 3] = quaternion.z();
+            poses_return[cnt * 7 + 4] = translation(0);
+            poses_return[cnt * 7 + 5] = translation(1);
+            poses_return[cnt * 7 + 6] = translation(2);
+          }
+          cnt++;
           break;
         }
       }
-
-      if (flag)
-      {
-        poses[i] = T_co;
-        if (poses_return)
-        {
-          poses_return[i * 7 + 0] = quaternion.w();
-          poses_return[i * 7 + 1] = quaternion.x();
-          poses_return[i * 7 + 2] = quaternion.y();
-          poses_return[i * 7 + 3] = quaternion.z();
-          poses_return[i * 7 + 4] = translation(0);
-          poses_return[i * 7 + 5] = translation(1);
-          poses_return[i * 7 + 6] = translation(2);
-        }
-        break;
-      }
     }
   }
+
 
   // setup lights
   std::cout << "setup lights" << std::endl;
@@ -613,23 +603,29 @@ void Synthesizer::render(int width, int height, float fx, float fy, float px, fl
   {
     // render vertmap
     std::cout << "is_textured_[class_ids[0]] render vertmap" << std::endl;
-    std::vector<Eigen::Matrix4f> transforms(num);
-    std::vector<std::vector<pangolin::GlBuffer *> > attributeBuffers(num);
-    std::vector<pangolin::GlBuffer*> modelIndexBuffers(num);
-    std::vector<pangolin::GlTexture*> textureBuffers(num);
-    std::vector<float> materialShininesses(num);
+    std::vector<Eigen::Matrix4f> transforms(sum_num_inst);
+    std::vector<std::vector<pangolin::GlBuffer *> > attributeBuffers(sum_num_inst);
+    std::vector<pangolin::GlBuffer*> modelIndexBuffers(sum_num_inst);
+    std::vector<pangolin::GlTexture*> textureBuffers(sum_num_inst);
+    std::vector<float> materialShininesses(sum_num_inst);
 
+    int inst = 0;
     for (int i = 0; i < num; i++)
     {
       int class_id = class_ids[i];
-      transforms[i] = poses[i].matrix().cast<float>();
-      materialShininesses[i] = drand(40, 120);
-      attributeBuffers[i].push_back(&texturedVertices_[class_id]);
-      attributeBuffers[i].push_back(&canonicalVertices_[class_id]);
-      attributeBuffers[i].push_back(&texturedCoords_[class_id]);
-      attributeBuffers[i].push_back(&vertexNormals_[class_id]);
-      modelIndexBuffers[i] = &texturedIndices_[class_id];
-      textureBuffers[i] = &texturedTextures_[class_id];
+
+      for (int j=0; j<num_instances[i]; j++) {
+        transforms[inst] = poses[inst].matrix().cast<float>();
+        materialShininesses[inst] = drand(40, 120);
+        attributeBuffers[inst].push_back(&texturedVertices_[class_id]);
+        attributeBuffers[inst].push_back(&canonicalVertices_[class_id]);
+        attributeBuffers[inst].push_back(&texturedCoords_[class_id]);
+        attributeBuffers[inst].push_back(&vertexNormals_[class_id]);
+        modelIndexBuffers[inst] = &texturedIndices_[class_id];
+        textureBuffers[inst] = &texturedTextures_[class_id];
+
+        inst++;
+      }      
     }
 
     glClearColor(std::nanf(""), std::nanf(""), std::nanf(""), std::nanf(""));
@@ -642,21 +638,27 @@ void Synthesizer::render(int width, int height, float fx, float fy, float px, fl
     // render vertmap
     std::cout << "!is_textured_[class_ids[0]] render vertmap" << std::endl;
 
-    std::vector<Eigen::Matrix4f> transforms(num);
-    std::vector<std::vector<pangolin::GlBuffer *> > attributeBuffers(num);
-    std::vector<pangolin::GlBuffer*> modelIndexBuffers(num);
-    std::vector<float> materialShininesses(num);
+    std::vector<Eigen::Matrix4f> transforms(sum_num_inst);
+    std::vector<std::vector<pangolin::GlBuffer *> > attributeBuffers(sum_num_inst);
+    std::vector<pangolin::GlBuffer*> modelIndexBuffers(sum_num_inst);
+    std::vector<float> materialShininesses(sum_num_inst);
 
+    int inst = 0;
     for (int i = 0; i < num; i++)
     {
       int class_id = class_ids[i];
-      transforms[i] = poses[i].matrix().cast<float>();
-      materialShininesses[i] = drand(40, 120);
-      attributeBuffers[i].push_back(&texturedVertices_[class_id]);
-      attributeBuffers[i].push_back(&canonicalVertices_[class_id]);
-      attributeBuffers[i].push_back(&vertexColors_[class_id]);
-      attributeBuffers[i].push_back(&vertexNormals_[class_id]);
-      modelIndexBuffers[i] = &texturedIndices_[class_id];
+
+      for (int j = 0; j<num_instances[i]; j++) {
+        transforms[inst] = poses[inst].matrix().cast<float>();
+        materialShininesses[inst] = drand(40, 120);
+        attributeBuffers[inst].push_back(&texturedVertices_[class_id]);
+        attributeBuffers[inst].push_back(&canonicalVertices_[class_id]);
+        attributeBuffers[inst].push_back(&vertexColors_[class_id]);
+        attributeBuffers[inst].push_back(&vertexNormals_[class_id]);
+        modelIndexBuffers[inst] = &texturedIndices_[class_id];
+
+        inst++;  
+      }
     }
 
     glClearColor(std::nanf(""), std::nanf(""), std::nanf(""), std::nanf(""));
@@ -680,21 +682,20 @@ void Synthesizer::render(int width, int height, float fx, float fy, float px, fl
       renderer_color_->texture(0).Download(vertmap, GL_RGB, GL_FLOAT);
 
     // compute object 2D centers
-    std::vector<float> center_x(num_classes, 0);
-    std::vector<float> center_y(num_classes, 0);
-    for (int i = 0; i < num; i++)
-    {
-      int class_id = class_ids[i];
+    std::vector<float> center_x(sum_num_inst, 0);
+    std::vector<float> center_y(sum_num_inst, 0);
+    for (int i = 0; i < sum_num_inst; i++)
+    {     
       float tx = poses_return[i * 7 + 4];
       float ty = poses_return[i * 7 + 5];
       float tz = poses_return[i * 7 + 6];
-      center_x[class_id] = fx * (tx / tz) + px;
-      center_y[class_id] = fy * (ty / tz) + py;
+      center_x[i] = fx * (tx / tz) + px;
+      center_y[i] = fy * (ty / tz) + py;
     }
 
     if (centers_return)
     {
-      for (int i = 0; i < num_classes; i++)
+      for (int i = 0; i < sum_num_inst; i++)
       {
         centers_return[2 * i] = center_x[i];
         centers_return[2 * i + 1] = center_y[i];
@@ -715,44 +716,23 @@ void Synthesizer::render(int width, int height, float fx, float fy, float px, fl
   // read color image
   std::cout << "read color image" << std::endl;
 
-  // float _color_[640*480*4];
-  // std::vector<float> _color_(640*480*4, 0.);
-
-  namespace p = boost::python;
-  namespace np = boost::python::numpy;
-  p::tuple shape = p::make_tuple(480, 640, 4);
-  np::dtype dtype = np::dtype::get_builtin<float>();
-  np::ndarray a = np::zeros(shape, dtype);
-
-  float* _color_ = reinterpret_cast<float*>(a.get_data());
-
   if (color)
   {
-    if (is_texture) {
+    if (is_texture)
       renderer_texture_->texture(1).Download(color, GL_BGRA, GL_FLOAT);
-      renderer_texture_->texture(1).Download(_color_, GL_BGRA, GL_FLOAT);
-    }
-    else {
+    else
       renderer_color_->texture(1).Download(color, GL_BGRA, GL_FLOAT);
-      renderer_color_->texture(1).Download(_color_, GL_BGRA, GL_FLOAT);
-    }
   }
-  
+
   // read depth image
   std::cout << "read depth image" << std::endl;
 
-  //float _depth_[640*480*3];
-  std::vector<float> _depth_(640*480*3, 0.);
   if (depth)
   {
-    if (is_texture) {
+    if (is_texture)
       renderer_texture_->texture(2).Download(depth, GL_RGB, GL_FLOAT);
-      renderer_texture_->texture(2).Download(_depth_.data(), GL_RGB, GL_FLOAT);
-    }
-    else {
+    else
       renderer_color_->texture(2).Download(depth, GL_RGB, GL_FLOAT);
-      renderer_color_->texture(2).Download(_depth_.data(), GL_RGB, GL_FLOAT);
-    }
   }
 
   if (is_save)
@@ -760,97 +740,8 @@ void Synthesizer::render(int width, int height, float fx, float fy, float px, fl
     std::string filename = std::to_string(counter_++);
     pangolin::SaveWindowOnRender(filename);
   }
-
-  // <!-- sonle
-  // calculate projected keypoints here
-  if (project_keypoint) {
-    printf("i am here\n");
-
-    assert( num_classes == num );
-
-    std::vector<cv::Point3f> mdlPts;
-    for (int i=0; i<num; i++) {
-      for (int j=0; j<kpt_num; j++) {
-
-        Vec3 mdPt = selMdlPoints[i*kpt_num + j]; 
-
-        // mdPt to {cam} coordinate system
-        Sophus::SE3d::Point mdPt_(mdPt(0), mdPt(1), mdPt(2));
-        Sophus::SE3d::Point mdPt__ = poses[i] * mdPt_;   // Pt_cam = cam_T_obj * Pt_obj
-
-        // casting double to float. link: https://stackoverflow.com/a/3498570
-        mdlPts.push_back(cv::Point3f((float) mdPt__(0), 
-                                     (float) mdPt__(1), 
-                                     (float) mdPt__(2)));
-      }
-    }
-
-    // project to image pixel
-    cv::Mat camMat = cv::Mat::zeros(3,3,CV_32FC1);
-    camMat.at<float>(0,0) = fx;
-    camMat.at<float>(1,1) = fy;
-    camMat.at<float>(2,2) = 1.;
-    camMat.at<float>(0,2) = px;
-    camMat.at<float>(1,2) = py;
-
-    std::vector<cv::Point2f> imgPts;
-    cv::projectPoints(mdlPts, 
-                      cv::Vec3f(0,0,0),
-                      cv::Vec3f(0,0,0),
-                      camMat,
-                      cv::Mat(),
-                      imgPts);
-
-    std::cout << "mdlPts size = " << mdlPts.size() << "\n "
-             << "imgPts size = " << imgPts.size() << std::endl;
-    
-    std::vector<int> status(imgPts.size()); // {0:outside, 1:occluded, 2:visible}
-    // check imgPts outside of FOV or visibility
-    for (int i=0; i<imgPts.size(); i++) 
-      if (imgPts[i].x < 0 || width_ <= imgPts[i].x ||
-          imgPts[i].y < 0 || height_ <= imgPts[i].y)
-      {
-        status[i] = 0;
-        std::cout << "Point " << i << " is outside." << std::endl;
-      } else {
-        
-        // projection point is inside FOV
-        float Z_depthmap = _depth_[(int)std::floor(imgPts[i].y) * width_ + (int)std::floor(imgPts[i].x)];
-        if (Z_depthmap < mdlPts[i].z) {
-          status[i] = 1; // not-visible
-        } else
-        {
-          /* code */
-          status[i] = 2; // visible
-        }
-      }
-
-    for (int i=0; i<imgPts.size(); i++) {
-      printf("(%f,%f) -> %d\n", imgPts[i].x, imgPts[i].y, status[i]);
-    }
-  }
-  std::cout << "sonle finishes." << std::endl;
-
-  // check images
-  cv::Mat color_ = cv::Mat::zeros(height_, width_, CV_32FC3);
-  for (int i=0; i<height_; i++)
-    for (int j=0; j<width_; j++) {
-      color_.at<cv::Vec3f>(i,j)[0] = 255. * _color_[i*width_ + j + 0] > 0 ? 255. * _color_[i*width_ + j + 0] : 0;
-      color_.at<cv::Vec3f>(i,j)[1] = 255. * _color_[i*width_ + j + 1] > 0 ? 255. * _color_[i*width_ + j + 1] : 0;
-      color_.at<cv::Vec3f>(i,j)[2] = 255. * _color_[i*width_ + j + 2] > 0 ? 255. * _color_[i*width_ + j + 2] : 0;
-    }
-  for (int i = 0; i<height_*width_*4; i++) 
-    if(_color_[i] != 0) printf("%f ", _color_[i]);
-  cv::threshold(color_, color_, 255, 255, cv::THRESH_TRUNC);
-  color_.convertTo(color_,CV_8UC3);
-  cv::imwrite("color.png", color_);
-  // cv::imshow("color", color_);
-  // cv::waitKey();
-  // -->
-  getchar();
-
-
   pangolin::FinishFrame();
+  std::cout << "Finished rendering." << std::endl;
 
   counter_++;
 }
@@ -2848,7 +2739,7 @@ int main(int argc, char** argv)
   {
     clock_t start = clock();    
 
-    Synthesizer.render(width, height, fx, fy, px, py, znear, zfar, tnear, tfar, NULL, NULL, NULL, NULL, NULL, NULL, true, true);
+    Synthesizer.render(width, height, fx, fy, px, py, znear, zfar, tnear, tfar, NULL, NULL, NULL, NULL, NULL, NULL, NULL, true, true);
 
     clock_t stop = clock();    
     double elapsed = (double)(stop - start) * 1000.0 / CLOCKS_PER_SEC;

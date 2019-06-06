@@ -125,7 +125,7 @@ class Synthesizer
   void render(int width, int height, float fx, float fy, float px, float py, float znear, float zfar, float tnear, float tfar, 
               float* color, float* depth, float* vertmap, float* class_indexes, float *poses_return, float* centers_return,
               bool is_sampling, bool is_sampling_pose);
-  void render_python(int width, int height, np::ndarray const & parameters, 
+  void render_python(int width, int height, np::ndarray const & parameters, np::ndarray const& num_instances,
     np::ndarray const & color, np::ndarray const & depth, np::ndarray const & vertmap, np::ndarray const & class_indexes, 
     np::ndarray const & poses_return, np::ndarray const & centers_return, bool is_sampling, bool is_sampling_pose);
 
