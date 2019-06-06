@@ -253,7 +253,7 @@ if __name__ == '__main__':
     tnear = 0.5
     tfar = 1.5
     num_classes = imdb.num_classes -1
-    factor_depth = 10000.0
+    factor_depth = syn_cfg["factor_depth"] # 10000.0
     intrinsic_matrix = np.array([[fx, 0, px], [0, fy, py], [0, 0, 1]])
     # root = '/capri/YCB_Video_Dataset/data_syn/'
     root = '/media/shawnle/Data0/YCB_Video_Dataset/YCB_Video_Dataset/data_syn_LOV/'
@@ -328,6 +328,13 @@ if __name__ == '__main__':
         synthesizer_.render_python(int(width), int(height), parameters, num_instances_, \
                                    im_syn, depth_syn, vertmap_syn, class_indexes, poses, centers, is_sampling, is_sampling_pose)
 
+        # print('poses =', poses)
+        # print('poses shape =', poses.shape)
+        # print('poses[0,:]', poses[0,:])
+        # print('poses[1,:]', poses[1,:])
+        # print('poses[2,:]', poses[2,:])
+        # exit()  
+
         # convert images
         im_syn = np.clip(255 * im_syn, 0, 255)
         im_syn = im_syn.astype(np.uint8)
@@ -360,6 +367,8 @@ if __name__ == '__main__':
                 qt[:, :3, inst] = quat2mat(poses[inst, :4])
                 qt[:, 3, inst] = poses[inst, 4:]
 
+                inst = inst + 1
+
                 if syn_cfg["check_whole_bb"]:
                     if not is_qualified(qt[:,:,inst], extents[j,:], intrinsic_matrix, height, width):
                         set_is_qualified = False
@@ -367,6 +376,10 @@ if __name__ == '__main__':
 
         if not set_is_qualified:
             continue
+
+        # print('qt[0] =', qt[:,:,0])
+        # print('qt[0] shape =', qt[:,:,0].shape)
+        # print('qt[1] =', qt[:,:,1])
 
         # if the projected blob of object is too small, then skip it
         flag = 1
@@ -493,7 +506,6 @@ if __name__ == '__main__':
         # scipy.io.savemat(filename, metadata, do_compression=True)
         with open(filename, 'w') as fp:
             json.dump(metadata, fp)
-        print(metadata)
-        exit()
+        # print(metadata)
 
         i += 1
