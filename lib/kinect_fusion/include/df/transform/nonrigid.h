@@ -9,6 +9,7 @@
 
 #include <iostream>
 #include <vector>
+#include <numeric>   // to use std::accumulate. Link: http://www.cplusplus.com/forum/beginner/14843/
 
 #include <thrust/host_vector.h>
 

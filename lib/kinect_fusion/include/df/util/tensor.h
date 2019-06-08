@@ -13,6 +13,10 @@
 
 namespace df {
 
+#define __attribute__(A) /* do nothing */  // Link: https://stackoverflow.com/questions/19249521/attribute-macro-and-its-effect-on-visual-studio-2010-based-projects
+
+	typedef unsigned int uint;
+
 enum Residency {
     HostResident,
     DeviceResident

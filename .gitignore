@@ -14,3 +14,9 @@ ros/build/*
 ros/data/*
 ros/devel/*
 images/*
+lib/*/build/*
+lib/*/build1/*
+lib/*/build*/*
+lib/*/.vscode/*
+.vscode/*
+lib/.vscode/*
