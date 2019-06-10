@@ -15,3 +15,8 @@ data/demo_images
 *.png
 data/cache/*
 data/LOV/*
+.vscode/*
+lib/*/build*
+lib/*/.vscode/*
+lib/.vscode/*
+events*
