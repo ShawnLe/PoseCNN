@@ -119,6 +119,7 @@ class Synthesizer
   ~Synthesizer();
 
   void setup(int width, int height);
+  void setup_multi_inst(int width, int height, np::ndarray const & num_instances);
   void init_rand(unsigned seed);
   void create_window(int width, int height);
   void destroy_window();
@@ -145,6 +146,7 @@ class Synthesizer
               np::ndarray& color, np::ndarray& depth, np::ndarray& vertmap, np::ndarray& poses_return, np::ndarray& centers_return, np::ndarray& extents);
 
   void loadModels(std::string filename);
+  void loadModels_multi_inst(const std::string filename, float* num_instances);
   void loadPoses(const std::string filename);
   aiMesh* loadTexturedMesh(const std::string filename, std::string & texture_name);
   void initializeBuffers(int model_index, aiMesh* assimpMesh, std::string textureName,
@@ -268,6 +270,7 @@ BOOST_PYTHON_MODULE(libsynthesizer)
   np::initialize();
   class_<Synthesizer>("Synthesizer", init<std::string, std::string>())
     .def("setup", &Synthesizer::setup)
+    .def("setup_multi_inst", &Synthesizer::setup_multi_inst)
     .def("init_rand", &Synthesizer::init_rand)
     .def("render_one_python", &Synthesizer::render_one_python)
     .def("render_python", &Synthesizer::render_python)

@@ -32,7 +32,7 @@ class lov(datasets.imdb):
         # self._classes = ('__background__', '002_master_chef_can')
         # self._classes = ('__background__', '003_cracker_box')  
         #self._classes = ('__background__', '002_master_chef_can', '003_cracker_box', '004_sugar_box', '006_mustard_bottle')
-        self._classes = ('__background__', '012_mineral_bottle', '013_clay_sheep', '004_sugar_box')  # 012_mineral_bottle
+        self._classes = ('__background__', '012_mineral_bottle', '014_almond_box', '015_duck_toy')  # 012_mineral_bottle
         # self._classes = ('__background__', '001_penlike_object')
         # self._classes = ('__background__', '004_sugar_box')
 

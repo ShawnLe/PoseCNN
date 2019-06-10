@@ -33,6 +33,60 @@ Synthesizer::Synthesizer(std::string model_file, std::string pose_file, int proj
 }
 // -->
 
+
+/*!
+   sonle with num_instances argument
+*/
+void Synthesizer::setup_multi_inst(int width, int height, np::ndarray const & num_instances)
+{
+
+  float* num_instances_ = reinterpret_cast<float*>(num_instances.get_data());
+
+  // <!-- sonle
+  width_ = width;
+  height_ = height;
+  // -->
+
+  create_window(width, height);
+
+  // loadModels(model_file_);
+  loadModels_multi_inst(model_file_, num_instances_);
+  std::cout << "loaded models" << std::endl;
+
+  loadPoses(pose_file_);
+  std::cout << "loaded poses" << std::endl;
+
+  // <!-- sonle
+  if (project_keypoint) {
+    selectModelPoints();
+  }
+  // -->
+
+  // create tensors
+
+  // labels
+  labels_device_ = new df::ManagedDeviceTensor2<int>({width, height});
+  std::cout << "loaded poses2" << std::endl;
+
+  // depth map
+  depth_map_ = new ManagedTensor<2, float>({width, height});
+  depth_map_device_ = new ManagedTensor<2, float, DeviceResident>(depth_map_->dimensions());
+  depth_factor_ = 1000.0;
+  depth_cutoff_ = 20.0;
+  std::cout << "loaded poses3" << std::endl;
+
+  // 3D points
+  vertex_map_device_ = new ManagedDeviceTensor2<Vec3>({width, height});
+  vertex_map_ = new ManagedHostTensor2<Vec3>({width, height});
+  predicted_verts_device_ = new ManagedDeviceTensor2<Eigen::UnalignedVec4<float> > ({width, height});
+  predicted_normals_device_ = new ManagedDeviceTensor2<Eigen::UnalignedVec4<float> > ({width, height});
+  predicted_verts_ = new ManagedHostTensor2<Eigen::UnalignedVec4<float> >({width, height});
+  predicted_normals_ = new ManagedHostTensor2<Eigen::UnalignedVec4<float> >({width, height});
+  std::cout << "loaded poses4" << std::endl;
+
+  setup_ = 1;
+}
+
 void Synthesizer::setup(int width, int height)
 {
   // <!-- sonle
@@ -259,6 +313,71 @@ void Synthesizer::loadPoses(const std::string filename)
   std::random_shuffle(poses_uniform_.begin(), poses_uniform_.end());
   std::cout << poses_uniform_.size() << " poses" << std::endl;
 }
+
+/*!
+  sonle works for multi instance
+*/
+// read the 3D models
+void Synthesizer::loadModels_multi_inst(const std::string filename, float* num_instances)
+{
+  std::cout << "[Synthesizer::loadModels] starts..." << std::endl;
+  std::ifstream stream(filename);
+  std::vector<std::string> model_names;
+  std::vector<std::string> texture_names;
+  std::string name;
+
+  while ( std::getline (stream, name) )
+  {
+    std::cout << name << std::endl;
+    model_names.push_back(name);
+  }
+  stream.close();
+
+  int num_classes = model_names.size();
+  printf("num_classes = %d\n", num_classes);
+  printf("num_instances = %f %f %f\n", num_instances[0], num_instances[1], num_instances[2]);
+  int sum_num_inst = 0;
+  for (int i=0; i<num_classes; i++) 
+    sum_num_inst = sum_num_inst + num_instances[i];
+
+  // load meshes
+  const int num_models = model_names.size();
+  assimpMeshes_.resize(num_models);
+  texture_names.resize(num_models);
+
+  for (int m = 0; m < num_models; ++m)
+  {
+    assimpMeshes_[m] = loadTexturedMesh(model_names[m], texture_names[m]);
+    std::cout << texture_names[m] << std::endl;
+  }
+
+  // buffers
+  texturedVertices_.resize(sum_num_inst);
+  canonicalVertices_.resize(sum_num_inst);
+  vertexColors_.resize(sum_num_inst);
+  vertexNormals_.resize(sum_num_inst);
+  texturedIndices_.resize(sum_num_inst);
+  texturedCoords_.resize(sum_num_inst);
+  texturedTextures_.resize(sum_num_inst);
+  is_textured_.resize(num_models);
+
+  int inst = 0;
+  for (int m = 0; m < num_models; m++)
+    for (int k = 0; k < num_instances[m]; k++)
+    {
+      bool is_textured;
+      if (texture_names[m] == "")
+        is_textured = false;
+      else
+        is_textured = true;
+      is_textured_[m] = is_textured;
+
+      initializeBuffers(inst, assimpMeshes_[m], texture_names[m], texturedVertices_[inst], canonicalVertices_[inst], vertexColors_[inst], vertexNormals_[inst],
+                        texturedIndices_[inst], texturedCoords_[inst], texturedTextures_[inst], is_textured);
+      inst++;
+    }
+}
+
 
 // read the 3D models
 void Synthesizer::loadModels(const std::string filename)
@@ -617,12 +736,19 @@ void Synthesizer::render(int width, int height, float fx, float fy, float px, fl
       for (int j=0; j<num_instances[i]; j++) {
         transforms[inst] = poses[inst].matrix().cast<float>();
         materialShininesses[inst] = drand(40, 120);
-        attributeBuffers[inst].push_back(&texturedVertices_[class_id]);
-        attributeBuffers[inst].push_back(&canonicalVertices_[class_id]);
-        attributeBuffers[inst].push_back(&texturedCoords_[class_id]);
-        attributeBuffers[inst].push_back(&vertexNormals_[class_id]);
-        modelIndexBuffers[inst] = &texturedIndices_[class_id];
-        textureBuffers[inst] = &texturedTextures_[class_id];
+        attributeBuffers[inst].push_back(&texturedVertices_[inst]);
+        attributeBuffers[inst].push_back(&canonicalVertices_[inst]);
+        attributeBuffers[inst].push_back(&texturedCoords_[inst]);
+        attributeBuffers[inst].push_back(&vertexNormals_[inst]);
+        modelIndexBuffers[inst] = &texturedIndices_[inst];
+        textureBuffers[inst] = &texturedTextures_[inst];
+
+        // attributeBuffers[inst].push_back(&texturedVertices_[class_id]);
+        // attributeBuffers[inst].push_back(&canonicalVertices_[class_id]);
+        // attributeBuffers[inst].push_back(&texturedCoords_[class_id]);
+        // attributeBuffers[inst].push_back(&vertexNormals_[class_id]);
+        // modelIndexBuffers[inst] = &texturedIndices_[class_id];
+        // textureBuffers[inst] = &texturedTextures_[class_id];
 
         inst++;
       }      
@@ -651,11 +777,17 @@ void Synthesizer::render(int width, int height, float fx, float fy, float px, fl
       for (int j = 0; j<num_instances[i]; j++) {
         transforms[inst] = poses[inst].matrix().cast<float>();
         materialShininesses[inst] = drand(40, 120);
-        attributeBuffers[inst].push_back(&texturedVertices_[class_id]);
-        attributeBuffers[inst].push_back(&canonicalVertices_[class_id]);
-        attributeBuffers[inst].push_back(&vertexColors_[class_id]);
-        attributeBuffers[inst].push_back(&vertexNormals_[class_id]);
-        modelIndexBuffers[inst] = &texturedIndices_[class_id];
+        attributeBuffers[inst].push_back(&texturedVertices_[inst]);
+        attributeBuffers[inst].push_back(&canonicalVertices_[inst]);
+        attributeBuffers[inst].push_back(&vertexColors_[inst]);
+        attributeBuffers[inst].push_back(&vertexNormals_[inst]);
+        modelIndexBuffers[inst] = &texturedIndices_[inst];
+
+        // attributeBuffers[inst].push_back(&texturedVertices_[class_id]);
+        // attributeBuffers[inst].push_back(&canonicalVertices_[class_id]);
+        // attributeBuffers[inst].push_back(&vertexColors_[class_id]);
+        // attributeBuffers[inst].push_back(&vertexNormals_[class_id]);
+        // modelIndexBuffers[inst] = &texturedIndices_[class_id];
 
         inst++;  
       }

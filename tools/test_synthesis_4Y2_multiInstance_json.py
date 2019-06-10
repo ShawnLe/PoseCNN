@@ -227,6 +227,8 @@ if __name__ == '__main__':
     # check number of instance
     num_instances = syn_cfg["num_instances"]
     assert len(num_instances) == imdb.num_classes -1 , "len(num_instance)=" + str(len(num_instances)) + " && num_classes-1=" + str(imdb.num_classes-1)
+    num_instances_ = np.array(num_instances, dtype=np.float32)
+
 
     extents = load_object_extents(os.path.join(os.getcwd(),'data'), imdb.num_classes-1)
     print ("extents = %s" % (extents))
@@ -263,7 +265,8 @@ if __name__ == '__main__':
         os.makedirs(root)
 
     synthesizer_ = libsynthesizer.Synthesizer(args.cad_name, args.pose_name)
-    synthesizer_.setup(width, height)
+    # synthesizer_.setup(width, height)
+    synthesizer_.setup_multi_inst(width, height, num_instances_)
     synthesizer_.init_rand(1200)
 
     parameters = np.zeros((8, ), dtype=np.float32)
@@ -321,7 +324,7 @@ if __name__ == '__main__':
         class_indexes = -1 * np.ones((np.sum(num_instances), ), dtype=np.float32)
         poses = np.zeros((np.sum(num_instances), 7), dtype=np.float32)
         centers = np.zeros((np.sum(num_instances), 2), dtype=np.float32)
-        num_instances_ = np.array(num_instances, dtype=np.float32)
+        # num_instances_ = np.array(num_instances, dtype=np.float32)
         is_sampling = True
         is_sampling_pose = False
 
