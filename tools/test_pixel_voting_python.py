@@ -361,7 +361,7 @@ def pixel_voting(vertex_map, num_keypoint=1):
                         yi = yi + uy_
 
     cv2.imwrite('vote_space.png', vote_space[:,:,0])
-    # np.save("vote_space.npy", vote_space)
+    np.save("vote_space.npy", vote_space)
 
     max_loc = np.zeros(shape=(2, num_keypoint))
     max_vote = np.zeros(shape=(1, num_keypoint))
