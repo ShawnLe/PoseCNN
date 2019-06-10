@@ -129,11 +129,15 @@ def load(data_path, session, ignore_missing=False):
         session: The current TensorFlow session
         ignore_missing: If true, serialized weights for missing layers are ignored.
         '''
-        data_dict = np.load(data_path).item()
+        # data_dict = np.load(data_path).item()
+        # link: https://stackoverflow.com/questions/38316283/trouble-using-numpy-load
+        data_dict = np.load(data_path, allow_pickle=True, encoding='latin1').item()
         for op_name in data_dict:
             print(op_name) 
             with tf.variable_scope(op_name, reuse=True):
-                for param_name, data in data_dict[op_name].iteritems():
+                # for param_name, data in data_dict[op_name].iteritems():
+                # link: https://stackoverflow.com/questions/30418481/error-dict-object-has-no-attribute-iteritems
+                for param_name, data in data_dict[op_name].items():
                     try:
                         var = tf.get_variable(param_name)
                         session.run(var.assign(data))
@@ -143,7 +147,8 @@ def load(data_path, session, ignore_missing=False):
                             raise
             # try to assign dual weights
             with tf.variable_scope(op_name+'_p', reuse=True):
-                for param_name, data in data_dict[op_name].iteritems():
+                #for param_name, data in data_dict[op_name].iteritems():
+                for param_name, data in data_dict[op_name].items():
                     try:
                         var = tf.get_variable(param_name)
                         session.run(var.assign(data))
@@ -153,7 +158,8 @@ def load(data_path, session, ignore_missing=False):
                             raise
 
             with tf.variable_scope(op_name+'_d', reuse=True):
-                for param_name, data in data_dict[op_name].iteritems():
+                # for param_name, data in data_dict[op_name].iteritems():
+                for param_name, data in data_dict[op_name].items():
                     try:
                         var = tf.get_variable(param_name)
                         session.run(var.assign(data))
@@ -479,7 +485,7 @@ def _vote_centers(im_label, cls_indexes, center, poses, num_classes):
     vertex_weights = np.zeros(vertex_targets.shape, dtype=np.float32)
 
     c = np.zeros((2, 1), dtype=np.float32)
-    for i in xrange(1, num_classes):
+    for i in range(1, num_classes):
         y, x = np.where(im_label == i)
         if len(x) > 0:
             ind = np.where(cls_indexes == i)[0] 
@@ -607,15 +613,20 @@ def data_generator(data_path=None, shuffle=True, batch_size=1, num_classes=1):
 if __name__ == "__main__":
 
     rgb_shape = (480, 640, 3)
-    md = vgg16convs_vertex_pred(shape=rgb_shape, trainable=False)
+    md = vgg16convs_vertex_pred(shape=rgb_shape, trainable=True)
 
     num_classes = 3 # including the background as '0'
 
     batch_size = 1
 
     # data_path = '/home/shawnle/Documents/Restore_PoseCNN/PoseCNN-master/data_syn_LOV/data_2_objs/small'
-    data_path = '/home/shawnle/Documents/Projects/PoseCNN-master/data/LOV/3d_train_data/small'
+    # data_path = '/home/shawnle/Documents/Projects/PoseCNN-master/data/LOV/3d_train_data/small'
+    data_path = 'D:\\SL\\3d_train_data\\small'
     dat_gen = data_generator(data_path, num_classes=num_classes, batch_size=batch_size)
+
+    vgg16_weight_path = '.\\data\\imagenet_models\\vgg16.npy'
+    sess = tf.Session()
+    load(vgg16_weight_path, sess, ignore_missing=True)
 
     print('activation layer = ', md.layers[-4])
     print(md.layers[-1].shape)
@@ -627,7 +638,7 @@ if __name__ == "__main__":
     print(type(vertex_targets))
     # total_loss = mdw.smooth_l1_loss_vertex(ytrue, mdw.vertex_pred)
     total_loss = md.smooth_l1_loss_vertex(md.layers[-1], vertex_targets, vertex_weights)
-    optimizer = tf.train.MomentumOptimizer(0.001, 0.9).minimize(total_loss)
+    optimizer = tf.train.MomentumOptimizer(0.0001, 0.9).minimize(total_loss)
 
     ########### tensorboard reports
     # with tf.name_scope('summaries'):
