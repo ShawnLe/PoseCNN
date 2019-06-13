@@ -80,7 +80,7 @@ def parse_args():
 def vertice_is_good(kpt_num, selMdlPoints, points, class_num, sel_num, vt_id):
 
     ret = True
-    dist_thres = .020
+    dist_thres = .010 #.020  -> tuned depneding on object size
     
     current_point =  points[class_num, vt_id, :]
 
@@ -93,11 +93,11 @@ def vertice_is_good(kpt_num, selMdlPoints, points, class_num, sel_num, vt_id):
     return ret
 
 
-""" @brief choose a random set of keypoints for each model
-    @param[out] selMdlPoints
-"""
 def selectModelPoints(num_classes, kpt_num, points):
-
+    """ @brief choose a random set of keypoints for each model \n
+        @param[in] points[#class, #points, 3] \n
+        @param[out] selMdlPoints[3, #class x #kpt] \n
+    """
     selMdlPoints = np.zeros([3, num_classes * kpt_num], dtype=np.float32)
 
     vertice_idx = 0

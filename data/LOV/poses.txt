@@ -1,3 +1,6 @@
-data/LOV/poses/012_mineral_bottle.txt
-data/LOV/poses/014_almond_box.txt
-data/LOV/poses/015_duck_toy.txt
+data/LOV/poses/006_mustard_bottle.txt
+data/LOV/poses/008_pudding_box.txt
+data/LOV/poses/010_potted_meat_can.txt
+data/LOV/poses/011_banana.txt
+data/LOV/poses/036_wood_block.txt
+data/LOV/poses/040_large_marker.txt

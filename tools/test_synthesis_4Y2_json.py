@@ -77,73 +77,73 @@ def parse_args():
 
 
 
-def vertice_is_good(kpt_num, selMdlPoints, points, class_num, sel_num, vt_id):
+# def vertice_is_good(kpt_num, selMdlPoints, points, class_num, sel_num, vt_id):
 
-    ret = True
-    dist_thres = .020
+#     ret = True
+#     dist_thres = .020
     
-    current_point =  points[class_num, vt_id, :]
+#     current_point =  points[class_num, vt_id, :]
 
-    for i in xrange(kpt_num*class_num, kpt_num*class_num +sel_num):
-        chosen_point = selMdlPoints[:,i]
+#     for i in xrange(kpt_num*class_num, kpt_num*class_num +sel_num):
+#         chosen_point = selMdlPoints[:,i]
 
-        if LA.norm(chosen_point -current_point) < dist_thres:
-            ret = False
-            break
-    return ret
+#         if LA.norm(chosen_point -current_point) < dist_thres:
+#             ret = False
+#             break
+#     return ret
 
 
-""" @brief choose a random set of keypoints for each model
-    @param[out] selMdlPoints
-"""
-def selectModelPoints(num_classes, kpt_num, points):
+# """ @brief choose a random set of keypoints for each model
+#     @param[out] selMdlPoints
+# """
+# def selectModelPoints(num_classes, kpt_num, points):
 
-    selMdlPoints = np.zeros([3, num_classes * kpt_num], dtype=np.float32)
+#     selMdlPoints = np.zeros([3, num_classes * kpt_num], dtype=np.float32)
 
-    vertice_idx = 0
-    for i in xrange(num_classes):
-        for j in xrange(kpt_num):
-            while not vertice_is_good(kpt_num, selMdlPoints, points, i, j, vertice_idx): 
-                vertice_idx = npr.randint(0, points.shape[1])
-            selMdlPoints[:, i*kpt_num + j]  = points[i, vertice_idx, :]
-            # print 'points[i, vertice_idx, :] =' + str( points[i, vertice_idx, :])
-            # print selMdlPoints[:, i*kpt_num + j]
+#     vertice_idx = 0
+#     for i in xrange(num_classes):
+#         for j in xrange(kpt_num):
+#             while not vertice_is_good(kpt_num, selMdlPoints, points, i, j, vertice_idx): 
+#                 vertice_idx = npr.randint(0, points.shape[1])
+#             selMdlPoints[:, i*kpt_num + j]  = points[i, vertice_idx, :]
+#             # print 'points[i, vertice_idx, :] =' + str( points[i, vertice_idx, :])
+#             # print selMdlPoints[:, i*kpt_num + j]
 
-    return selMdlPoints
+#     return selMdlPoints
 
-""" @brief check if the projected point is visible or not
-    @param[out] visibility status {0: out-of-FOV, 1: hidden, 2: visible}
-"""
-def checkVisibility(width, height, P3d, p2d, depthmap):
+# """ @brief check if the projected point is visible or not
+#     @param[out] visibility status {0: out-of-FOV, 1: hidden, 2: visible}
+# """
+# def checkVisibility(width, height, P3d, p2d, depthmap):
 
-    p2d_ = p2d
+#     p2d_ = p2d
 
-    p2d = np.floor(p2d).astype(dtype=np.int)
-    if p2d[0] < 0 or width <= p2d[0]  \
-       or p2d[1] < 0 or height <= p2d[1]:
-        vis = 0
-    else:
-        # Z_depthmap = depthmap[p2d[1], p2d[0]] # need to use sub-pixel accessing
-        # print 'rounding depthmap'
-        # print depthmap[p2d[1], p2d[0]]
-        # print depthmap[p2d[1]+1, p2d[0]]
-        # print depthmap[p2d[1], p2d[0]+1]
-        # print depthmap[p2d[1]+1, p2d[0]+1]
+#     p2d = np.floor(p2d).astype(dtype=np.int)
+#     if p2d[0] < 0 or width <= p2d[0]  \
+#        or p2d[1] < 0 or height <= p2d[1]:
+#         vis = 0
+#     else:
+#         # Z_depthmap = depthmap[p2d[1], p2d[0]] # need to use sub-pixel accessing
+#         # print 'rounding depthmap'
+#         # print depthmap[p2d[1], p2d[0]]
+#         # print depthmap[p2d[1]+1, p2d[0]]
+#         # print depthmap[p2d[1], p2d[0]+1]
+#         # print depthmap[p2d[1]+1, p2d[0]+1]
 
-        p2d_ = np.reshape(p2d_,(1,1,2)).astype(dtype=np.float32)
-        # print 'p2d_ = ' + str(p2d_)        
-        # print 'p2d_ shape = ' + str(p2d_.shape)
+#         p2d_ = np.reshape(p2d_,(1,1,2)).astype(dtype=np.float32)
+#         # print 'p2d_ = ' + str(p2d_)        
+#         # print 'p2d_ shape = ' + str(p2d_.shape)
     
-        Z_depthmap = cv2.remap(depthmap, p2d_, None, cv2.INTER_LINEAR)
-        # print 'sub-pixel = ' + str(Z_depthmap)
+#         Z_depthmap = cv2.remap(depthmap, p2d_, None, cv2.INTER_LINEAR)
+#         # print 'sub-pixel = ' + str(Z_depthmap)
 
-        #if Z_depthmap < P3d[2]:
-        if P3d[2] - Z_depthmap > .001 :
-            vis = 1
-        else:
-            vis = 2
+#         #if Z_depthmap < P3d[2]:
+#         if P3d[2] - Z_depthmap > .001 :
+#             vis = 1
+#         else:
+#             vis = 2
 
-    return vis
+#     return vis
 
 
 def load_object_extents(data_path, num_classes):
