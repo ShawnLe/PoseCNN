@@ -20,7 +20,7 @@ class config():
     def __init__(self):
         self.imdb_name = 'lov_keyframe'
         self.BACKGROUND = 'data/cache/backgrounds.pkl'
-        self.data_num = 347
+        self.data_num = 222
         self.root = '/media/shawnle/Data0/YCB_Video_Dataset/YCB_Video_Dataset/data_syn_LOV/'
 
 
@@ -30,6 +30,7 @@ def prepare_augment_from_real_data(mat_file):
     '''
 
     def prepare_from_json(imdb):
+
         import json
         myfile = os.path.join(os.getcwd(), 'lib','synthesize_4Y2', 'syn_cfg.json')
         print "Opening ", myfile
@@ -49,7 +50,12 @@ def prepare_augment_from_real_data(mat_file):
 
     def prepare_from_real_data(mat_file):
 
-        meta = scipy.io.loadmat(mat_file)
+        # meta = scipy.io.loadmat(mat_file)
+        import json
+        print "Opening ", mat_file
+        with open(mat_file, 'r') as f:
+            meta = json.load(f)
+        
         K = meta["intrinsic_matrix"]
 
         fx = K[0,0]
@@ -117,13 +123,17 @@ if __name__ == '__main__':
 
     # DATA_ROOT = "/media/shawnle/Data0/YCB_Video_Dataset/PoseCNN_Dataset"
     # DATA_ROOT = "/media/shawnle/Data0/YCB_Video_Dataset/YCB_Video_Dataset/data_syn_LOV/Loc_data"
-    DATA_ROOT = "/media/shawnle/Data0/YCB_Video_Dataset/YCB_Video_Dataset/data/0002/"
+    # DATA_ROOT = "/media/shawnle/Data0/YCB_Video_Dataset/YCB_Video_Dataset/data/0002/"
+    DATA_ROOT = "/media/shawnle/Data0/YCB_Video_Dataset/SLM_datasets/Exhibition/DUCK"
     # p = Path(DATA_ROOT)
     # p = osp.dirname(DATA_ROOT)
 
-    augment_require_mat = "{}/{:06d}-meta.mat".format(DATA_ROOT,1)
+    # augment_require_mat = "{}/{:06d}-meta.mat".format(DATA_ROOT,1)
+    augment_require_mat = "{}/{:06d}-meta.json".format(DATA_ROOT,1)
     augment_require_params = prepare_augment_from_real_data(augment_require_mat)
     pr = augment_require_params
+
+    exit()
 
     # check output dir
     if not os.path.exists(pr['cfg'].root):

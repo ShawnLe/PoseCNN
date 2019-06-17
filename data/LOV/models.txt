@@ -1,6 +1,1 @@
-data/LOV/models/006_mustard_bottle/textured.obj
-data/LOV/models/008_pudding_box/textured.obj
-data/LOV/models/010_potted_meat_can/textured.obj
-data/LOV/models/011_banana/textured.obj
-data/LOV/models/036_wood_block/textured.obj
-data/LOV/models/040_large_marker/textured.obj
+data/LOV/models/015_duck_toy/textured.obj
