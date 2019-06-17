@@ -31,7 +31,6 @@ def prepare_augment_from_real_data(mat_file):
 
     def prepare_from_json(imdb):
 
-        import json
         myfile = os.path.join(os.getcwd(), 'lib','synthesize_4Y2', 'syn_cfg.json')
         print "Opening ", myfile
         with open(myfile, 'r') as f:
@@ -51,12 +50,11 @@ def prepare_augment_from_real_data(mat_file):
     def prepare_from_real_data(mat_file):
 
         # meta = scipy.io.loadmat(mat_file)
-        import json
         print "Opening ", mat_file
         with open(mat_file, 'r') as f:
             meta = json.load(f)
         
-        K = meta["intrinsic_matrix"]
+        K = np.array(meta["intrinsic_matrix"]).reshape((3,3))
 
         fx = K[0,0]
         fy = K[1,1]
@@ -79,9 +77,9 @@ def prepare_augment_from_real_data(mat_file):
 
         intrinsic_matrix = np.array([[fx, 0, px], [0, fy, py], [0, 0, 1]])
 
-        vertmap = meta['vertmap']
-        height = vertmap.shape[0]
-        width = vertmap.shape[1]
+        rgb = cv2.imread(os.path.join('/media/shawnle/Data0/YCB_Video_Dataset/SLM_datasets/Exhibition/DUCK', '{:06d}-color.png').format(1))
+        height = rgb.shape[0]
+        width = rgb.shape[1]
 
         return {'meta': meta,
                 'parameters' : parameters,
@@ -133,8 +131,6 @@ if __name__ == '__main__':
     augment_require_params = prepare_augment_from_real_data(augment_require_mat)
     pr = augment_require_params
 
-    exit()
-
     # check output dir
     if not os.path.exists(pr['cfg'].root):
         os.makedirs(pr['cfg'].root)
@@ -175,19 +171,25 @@ if __name__ == '__main__':
     factor_depth = pr['from_meta']['factor_depth']
     root = pr['cfg'].root
     imdb = pr['imdb']
-    for i in range(1,500,10):  #cfg.data_num
+    cfg = pr['cfg']
+
+    for i in range(cfg.data_num):  #cfg.data_num
         # if i == 94:
         #     continue
 
         # print (p.joinpath("{:06d}-meta.mat".format(x)))
         # meta_dat = scipy.io.loadmat(p.joinpath("{:06d}-meta.mat".format(x)))
-        meta_dat = scipy.io.loadmat("{}/{:06d}-meta.mat".format(DATA_ROOT,i))
-        # print (meta_dat)
-
-        poses = meta_dat['poses']
+        # meta_dat = scipy.io.loadmat("{}/{:06d}-meta.mat".format(DATA_ROOT,i))
+        mat_file = "{}/{:06d}-meta.json".format(DATA_ROOT,i)
+        print "Opening ", mat_file
+        with open(mat_file, 'r') as f:
+            meta_dat = json.load(f)
+        print (meta_dat)
+        
+        poses = np.array(meta_dat['poses']).reshape((4,4))
         print('poses', poses)
 
-        intrinsic_matrix = meta_dat['intrinsic_matrix']
+        intrinsic_matrix = np.array(meta_dat['intrinsic_matrix']).reshape((3,3))
 
         index = np.where(class_indexes >= 0)[0]
         print("class_indexes=", class_indexes)
@@ -196,6 +198,8 @@ if __name__ == '__main__':
         sum_num_inst = np.sum(pr['from_json']['num_instances']).astype(int)
         qt = np.zeros((3, 4, sum_num_inst), dtype=np.float32)
         print('qt',qt)
+
+        # exit()
 
         # whole set of poses, each has whole bounding-box inside FOV
         set_is_qualified = True
