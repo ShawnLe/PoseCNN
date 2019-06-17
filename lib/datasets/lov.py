@@ -36,7 +36,8 @@ class lov(datasets.imdb):
         # self._classes = ('__background__', '001_penlike_object')
         # self._classes = ('__background__', '004_sugar_box')
         # self._classes = ('__background__', '013_clay_sheep')
-        self._classes = ('__background__', '006_mustard_bottle', '008_pudding_box', '010_potted_meat_can', '011_banana', '036_wood_block', '040_large_marker')
+        self._classes = ('__background__', '015_duck_toy')
+        # self._classes = ('__background__', '006_mustard_bottle', '008_pudding_box', '010_potted_meat_can', '011_banana', '036_wood_block', '040_large_marker')
 
         # self._class_colors = [(255, 255, 255), (255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0), (255, 0, 255), (0, 255, 255), \
         #                       (128, 0, 0), (0, 128, 0), (0, 0, 128), (128, 128, 0), (128, 0, 128), (0, 128, 128), \
@@ -44,16 +45,17 @@ class lov(datasets.imdb):
         #                       (192, 0, 0), (0, 192, 0), (0, 0, 192)]
         # self._class_colors = [(255, 255, 255), (255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0)]
         # self._class_colors = [(255, 255, 255), (255, 0, 0), (0, 255, 0), (0, 0, 255)]
-        self._class_colors = [(255, 255, 255), (255, 100, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0), (255, 0, 255), (0, 255, 255)]
+        # self._class_colors = [(255, 255, 255), (255, 100, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0), (255, 0, 255), (0, 255, 255)]
+        self._class_colors = [(255, 255, 255), (255, 100, 0)]
 
         # self._class_weights = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
         # self._symmetry = np.array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1])
-        # self._class_weights = [1, 1]
+        self._class_weights = [1, 1]
         # self._class_weights = [1, 1, 1, 1]
-        self._class_weights = [1, 1, 1, 1, 1, 1, 1]
-        self._symmetry = np.array([0, 0, 0, 0, 0, 0, 0])
+        # self._class_weights = [1, 1, 1, 1, 1, 1, 1]
+        # self._symmetry = np.array([0, 0, 0, 0, 0, 0, 0])
         # self._symmetry = np.array([0, 0, 0, 0])
-        # self._symmetry = np.array([0, 0])
+        self._symmetry = np.array([0, 0])
         self._points, self._points_all = self._load_object_points()
         self._extents = self._load_object_extents()
 
