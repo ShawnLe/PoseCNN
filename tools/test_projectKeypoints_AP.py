@@ -199,16 +199,14 @@ if __name__ == '__main__':
         qt = np.zeros((3, 4, sum_num_inst), dtype=np.float32)
         print('qt',qt)
 
-        # exit()
-
         # whole set of poses, each has whole bounding-box inside FOV
         set_is_qualified = True
         inst = 0
         for j in xrange(num):
             for k in xrange(num_instances[j]):
                 ind = index[j]
-                qt[:, :3, inst] = poses[:,:3,j] #quat2mat(poses[inst, :4])
-                qt[:, 3, inst] = poses[:,3,j] #poses[inst, 4:]
+                qt[:, :3, inst] = poses[:3,:3,j] #quat2mat(poses[inst, :4])
+                qt[:, 3, inst] = poses[:3,3,j] #poses[inst, 4:]
 
                 inst = inst + 1
 
