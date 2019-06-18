@@ -3,7 +3,6 @@
 '''
 import os, sys
 import os.path as osp
-import scipy.io
 import cPickle
 import json
 
@@ -49,7 +48,6 @@ def prepare_augment_from_real_data(mat_file):
 
     def prepare_from_real_data(mat_file):
 
-        # meta = scipy.io.loadmat(mat_file)
         print "Opening ", mat_file
         with open(mat_file, 'r') as f:
             meta = json.load(f)
@@ -178,15 +176,14 @@ if __name__ == '__main__':
         #     continue
 
         # print (p.joinpath("{:06d}-meta.mat".format(x)))
-        # meta_dat = scipy.io.loadmat(p.joinpath("{:06d}-meta.mat".format(x)))
-        # meta_dat = scipy.io.loadmat("{}/{:06d}-meta.mat".format(DATA_ROOT,i))
-        mat_file = "{}/{:06d}-meta.json".format(DATA_ROOT,i)
+        mat_file = "{}/{:06d}-meta_rev.json".format(DATA_ROOT,i)
         print "Opening ", mat_file
         with open(mat_file, 'r') as f:
             meta_dat = json.load(f)
         print (meta_dat)
-        
-        poses = np.array(meta_dat['poses']).reshape((4,4))
+
+        num = pr['num_classes']         
+        poses = np.array(meta_dat['poses']).reshape((4,4,num))
         print('poses', poses)
 
         intrinsic_matrix = np.array(meta_dat['intrinsic_matrix']).reshape((3,3))
@@ -194,10 +191,12 @@ if __name__ == '__main__':
         index = np.where(class_indexes >= 0)[0]
         print("class_indexes=", class_indexes)
         print("index=",index)
-        num = pr['num_classes'] 
+
         sum_num_inst = np.sum(pr['from_json']['num_instances']).astype(int)
         qt = np.zeros((3, 4, sum_num_inst), dtype=np.float32)
         print('qt',qt)
+        print('qt shape',qt.shape)
+        print('sum_num_inst', sum_num_inst)
 
         # whole set of poses, each has whole bounding-box inside FOV
         set_is_qualified = True
@@ -205,6 +204,7 @@ if __name__ == '__main__':
         for j in xrange(num):
             for k in xrange(num_instances[j]):
                 ind = index[j]
+                print('j, inst',j, inst)
                 qt[:, :3, inst] = poses[:3,:3,j] #quat2mat(poses[inst, :4])
                 qt[:, 3, inst] = poses[:3,3,j] #poses[inst, 4:]
 
@@ -219,7 +219,12 @@ if __name__ == '__main__':
             continue   
 
         # metadata
-        metadata = {'poses': qt.tolist(), 'cls_indexes': (class_indexes[index].astype(int) + 1).tolist()}
+        # print('poses', qt.tolist())
+        # print('cls_indexes', class_indexes)
+        # print('cls_indexes', (class_indexes[index].astype(int) + 1).tolist())
+        # metadata = {'poses': qt.tolist(), 'cls_indexes': (class_indexes[index].astype(int) + 1).tolist()}
+        metadata = {'poses': qt.tolist(), 'cls_indexes': [class_indexes[id] + 1 for id in range(len(class_indexes)) ]}
+        # print( 'metadata', metadata)
 
         # sampling and project model points
         Y2_meta = []
@@ -231,6 +236,7 @@ if __name__ == '__main__':
 
         depth_name = "{}/{:06d}-depth.png".format(DATA_ROOT,i)
         im_depth_raw = cv2.imread(depth_name, cv2.IMREAD_UNCHANGED).astype(dtype=np.float32)   # BUG?!
+
         for id in range(num_cls): # num_cls
             for jj in xrange(num_instances[id]): # num_instances[id]
 
@@ -280,8 +286,7 @@ if __name__ == '__main__':
         print filename
 
         # save meta_data
-        filename = root + '{:06d}-meta.json'.format(i)
-        # scipy.io.savemat(filename, metadata, do_compression=True)
+        filename = root + '{:06d}-meta_cpm.json'.format(i)
         with open(filename, 'w') as fp:
             json.dump(metadata, fp)
-        # print(metadata)
+        print(metadata)

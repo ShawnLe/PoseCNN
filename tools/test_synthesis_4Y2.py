@@ -138,12 +138,13 @@ def checkVisibility(width, height, P3d, p2d, depthmap):
         # print 'sub-pixel = ' + str(Z_depthmap)
 
         #if Z_depthmap < P3d[2]:
-        if P3d[2] - Z_depthmap > .001 :
+        if P3d[2] - Z_depthmap > .005 :
             vis = 1
         else:
             vis = 2
 
-    return vis
+    # return vis
+    return 2
 
 if __name__ == '__main__':
 
