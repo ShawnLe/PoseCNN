@@ -7,11 +7,12 @@ import cPickle
 import json
 
 import numpy as np
+import numpy.linalg as la
 from transforms3d.quaternions import quat2mat
 import cv2
 
 import _init_paths
-from test_synthesis_4Y2 import selectModelPoints, checkVisibility
+from test_synthesis_4Y2 import selectModelPoints, checkVisibility, selectModelPointsBySpatialProp, calc_target_spatial
 
 from datasets.factory import get_imdb
 
@@ -45,6 +46,31 @@ def prepare_augment_from_real_data(mat_file):
         return {'num_instances' : num_instances_,
                 'num_kpt' : num_kpt,
                 'syn_cfg' : syn_cfg}
+
+
+    def calc_spatial_prop(points):
+        '''
+           @note: spatial_props[id] refers to object class (id+1)-th
+        '''
+
+        num = points.shape[0]
+        spatial_props = []
+        for cls_id in range(1,num):
+
+            class_pts = points[cls_id,...].T
+
+            covar = np.cov(class_pts)
+            eval, evec = la.eig(covar)
+            m = np.mean(class_pts, axis=1)
+
+            print('covar, eval-evec, m', covar, eval, evec, m)
+
+            spatial_prop = {'e0_div_e1': eval[0]/eval[1], 'e1_div_e2': eval[1]/eval[2]}
+
+            spatial_props.append(spatial_prop)
+
+        return spatial_props
+
 
     def prepare_from_real_data(mat_file):
 
@@ -97,8 +123,11 @@ def prepare_augment_from_real_data(mat_file):
     points = imdb._points_all
     num_classes = imdb.num_classes -1
 
-    print('points max min:', np.amax(points), np.amin(points))
-    print('points shape:', points.shape)
+    # print('points max min:', np.amax(points), np.amin(points))
+    # print('points shape:', points.shape)
+    # print('points[1,...] :', points[1,...])
+
+    spatial_props = calc_spatial_prop(points)
     
     return { 
             'num_classes' : num_classes,
@@ -106,6 +135,7 @@ def prepare_augment_from_real_data(mat_file):
             'from_json' : from_json,
             'from_meta' : from_real_mat,
             'num_cls' : points.shape[0]-1,
+            'spatial_props' : spatial_props,
             'cfg' : cfg, 
             'imdb' : imdb
             }
@@ -141,8 +171,15 @@ if __name__ == '__main__':
     #     print 'backgrounds loaded from {}'.format(cache_file)
 
     # select random points
+    kpt_num = pr['from_json']['num_kpt']
+    num_classes = pr['num_cls']
     if pr['from_json']['syn_cfg']["sel_random_points"]:
-        selMdlPoints = selectModelPoints(pr['num_cls'], pr['from_json']['num_kpt'], pr['points'][1:,:,:])  # not use the background
+        # selMdlPoints = selectModelPoints(pr['num_cls'], pr['from_json']['num_kpt'], pr['points'][1:,:,:])  # not use the background
+        selMdlPoints = np.zeros([3, num_classes * kpt_num], dtype=np.float32)
+        for i in range(pr['num_cls']):
+            selMdlPoints[:,i*kpt_num:(i+1)*kpt_num] = selectModelPointsBySpatialProp(pr['from_json']['num_kpt'], pr['points'][i+1,:,:], pr['spatial_props'][i])  # not use the background
+            print('selected mdl pts')
+            print(selMdlPoints[:,i*kpt_num:(i+1)*kpt_num])
 
     else:
         selMdlPoints = pr['from_json']['syn_cfg']["selectModelPoints"]
