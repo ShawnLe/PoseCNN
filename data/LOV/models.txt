@@ -1,4 +1,1 @@
-data/LOV/models/002_master_chef_can/textured.obj
-data/LOV/models/003_cracker_box/textured.obj
-data/LOV/models/004_sugar_box/textured.obj
-data/LOV/models/006_mustard_bottle/textured.obj
+data/LOV/models/015_duck_toy/textured.obj

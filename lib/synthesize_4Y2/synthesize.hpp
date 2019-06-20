@@ -119,13 +119,14 @@ class Synthesizer
   ~Synthesizer();
 
   void setup(int width, int height);
+  void setup_multi_inst(int width, int height, np::ndarray const & num_instances);
   void init_rand(unsigned seed);
   void create_window(int width, int height);
   void destroy_window();
-  void render(int width, int height, float fx, float fy, float px, float py, float znear, float zfar, float tnear, float tfar, 
+  void render(int width, int height, float fx, float fy, float px, float py, float znear, float zfar, float tnear, float tfar, float* num_instances, 
               float* color, float* depth, float* vertmap, float* class_indexes, float *poses_return, float* centers_return,
               bool is_sampling, bool is_sampling_pose);
-  void render_python(int width, int height, np::ndarray const & parameters, 
+  void render_python(int width, int height, np::ndarray const & parameters, np::ndarray const & num_instances, 
     np::ndarray const & color, np::ndarray const & depth, np::ndarray const & vertmap, np::ndarray const & class_indexes, 
     np::ndarray const & poses_return, np::ndarray const & centers_return, bool is_sampling, bool is_sampling_pose);
 
@@ -145,6 +146,7 @@ class Synthesizer
               np::ndarray& color, np::ndarray& depth, np::ndarray& vertmap, np::ndarray& poses_return, np::ndarray& centers_return, np::ndarray& extents);
 
   void loadModels(std::string filename);
+  void loadModels_multi_inst(const std::string filename, float* num_instances);
   void loadPoses(const std::string filename);
   aiMesh* loadTexturedMesh(const std::string filename, std::string & texture_name);
   void initializeBuffers(int model_index, aiMesh* assimpMesh, std::string textureName,
@@ -268,6 +270,7 @@ BOOST_PYTHON_MODULE(libsynthesizer)
   np::initialize();
   class_<Synthesizer>("Synthesizer", init<std::string, std::string>())
     .def("setup", &Synthesizer::setup)
+    .def("setup_multi_inst", &Synthesizer::setup_multi_inst)
     .def("init_rand", &Synthesizer::init_rand)
     .def("render_one_python", &Synthesizer::render_one_python)
     .def("render_python", &Synthesizer::render_python)

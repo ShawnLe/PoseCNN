@@ -80,7 +80,7 @@ def parse_args():
 def vertice_is_good(kpt_num, selMdlPoints, points, class_num, sel_num, vt_id):
 
     ret = True
-    dist_thres = .020
+    dist_thres = .010 #.020  -> tuned depneding on object size
     
     current_point =  points[class_num, vt_id, :]
 
@@ -92,12 +92,96 @@ def vertice_is_good(kpt_num, selMdlPoints, points, class_num, sel_num, vt_id):
             break
     return ret
 
+def vertice_is_good(kpt_num, selMdlPoints, points, sel_num, vt_id):
 
-""" @brief choose a random set of keypoints for each model
-    @param[out] selMdlPoints
-"""
+    assert points.shape[1] == 3
+
+    ret = True
+    dist_thres = .010 #.020  -> tuned depneding on object size
+    
+    current_point =  points[vt_id, :]
+
+    for i in xrange(0, sel_num):
+        chosen_point = selMdlPoints[:,i]
+
+        if LA.norm(chosen_point -current_point) < dist_thres:
+            ret = False
+            break
+    return ret
+
+def calc_target_spatial(class_pts):
+
+    assert class_pts.shape[0] == 3
+
+    covar = np.cov(class_pts)
+    eval, evec = LA.eig(covar)
+    m = np.mean(class_pts, axis=1)
+
+    print('covar, eval-evec, m', covar, eval, evec, m)
+
+    spatial_prop = {'e0_div_e1': eval[0]/eval[1], 'e1_div_e2': eval[1]/eval[2]}
+
+    return spatial_prop
+
+
+def selectModelPointsBySpatialProp(kpt_num, points, spatial_props):
+    '''
+        @brief this function is child-like of selectModelPoints but with spatial covariance check of the selected point-set
+               refer to the parent fun for more parameter description
+    '''
+
+    def spatial_prop_is_good(points, target_spatial):
+
+        assert points.shape[0] == 3
+
+        thres = .5 #100 
+
+        e0e1_ = target_spatial['e0_div_e1']
+        e1e2_ = target_spatial['e1_div_e2']
+        
+        covar = np.cov(points)
+        eval, evec = LA.eig(covar)
+        e0e1 = eval[0]/eval[1]
+        e1e2 = eval[1]/eval[2]
+        print('targets -> ', e0e1_, e1e2_)
+        print('currnet -> ', e0e1, e1e2)
+
+        cost = np.sqrt((e0e1 - e0e1_)**2 + (e1e2 - e1e2_)**2)
+        print ('cost == ', cost)
+
+        if cost < thres: 
+            return True
+        else:
+            return False            
+
+    assert points.shape[1] == 3
+
+    selMdlPoints = np.zeros([3, kpt_num], dtype=np.float32)
+
+    max_try = 1000
+    vertice_idx = 0
+
+    try_cnt = 0
+    while try_cnt == 0 or (not spatial_prop_is_good(selMdlPoints, spatial_props) and try_cnt < max_try):
+
+        for j in xrange(kpt_num):
+            while not vertice_is_good(kpt_num, selMdlPoints, points, j, vertice_idx):  
+                vertice_idx = npr.randint(0, points.shape[0])
+            selMdlPoints[:, j]  = points[vertice_idx, :]
+            # print 'points[i, vertice_idx, :] =' + str( points[i, vertice_idx, :])
+            # print selMdlPoints[:, i*kpt_num + j]
+
+        try_cnt = try_cnt + 1
+        print("try num now is ... ", try_cnt)
+
+    return selMdlPoints
+
+
 def selectModelPoints(num_classes, kpt_num, points):
-
+    """ @brief choose a random set of keypoints for each model \n
+        @param[in] points[#class, #points, 3] \n
+        @param[out] selMdlPoints[3, #class x #kpt] \n
+    """
     selMdlPoints = np.zeros([3, num_classes * kpt_num], dtype=np.float32)
 
     vertice_idx = 0
@@ -138,12 +222,13 @@ def checkVisibility(width, height, P3d, p2d, depthmap):
         # print 'sub-pixel = ' + str(Z_depthmap)
 
         #if Z_depthmap < P3d[2]:
-        if P3d[2] - Z_depthmap > .001 :
+        if P3d[2] - Z_depthmap > .005 :
             vis = 1
         else:
             vis = 2
 
-    return vis
+    # return vis
+    return 2
 
 if __name__ == '__main__':
 

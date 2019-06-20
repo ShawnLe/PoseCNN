@@ -224,6 +224,12 @@ if __name__ == '__main__':
     imdb = get_imdb(args.imdb_name)
     print (imdb.num_classes)
 
+    # check number of instance
+    num_instances = syn_cfg["num_instances"]
+    assert len(num_instances) == imdb.num_classes -1 , "len(num_instance)=" + str(len(num_instances)) + " && num_classes-1=" + str(imdb.num_classes-1)
+    num_instances_ = np.array(num_instances, dtype=np.float32)
+
+
     extents = load_object_extents(os.path.join(os.getcwd(),'data'), imdb.num_classes-1)
     print ("extents = %s" % (extents))
     print ("extents shape = {}" .format(extents.shape))
@@ -247,9 +253,9 @@ if __name__ == '__main__':
     zfar = 6.0
     znear = 0.25
     tnear = 0.5
-    tfar = 2.0
+    tfar = 1.5
     num_classes = imdb.num_classes -1
-    factor_depth = 10000.0
+    factor_depth = syn_cfg["factor_depth"] # 10000.0
     intrinsic_matrix = np.array([[fx, 0, px], [0, fy, py], [0, 0, 1]])
     # root = '/capri/YCB_Video_Dataset/data_syn/'
     root = '/media/shawnle/Data0/YCB_Video_Dataset/YCB_Video_Dataset/data_syn_LOV/'
@@ -259,7 +265,8 @@ if __name__ == '__main__':
         os.makedirs(root)
 
     synthesizer_ = libsynthesizer.Synthesizer(args.cad_name, args.pose_name)
-    synthesizer_.setup(width, height)
+    # synthesizer_.setup(width, height)
+    synthesizer_.setup_multi_inst(width, height, num_instances_)
     synthesizer_.init_rand(1200)
 
     parameters = np.zeros((8, ), dtype=np.float32)
@@ -287,6 +294,7 @@ if __name__ == '__main__':
 
     if syn_cfg["sel_random_points"]:
         selMdlPoints = selectModelPoints(num_cls, num_kpt, points[1:,:,:])  # not use the background
+
     else:
         selMdlPoints = syn_cfg["selectModelPoints"]
 
@@ -299,11 +307,10 @@ if __name__ == '__main__':
 
         selMdlPoints = np.array(selMdlPoints)
         selMdlPoints = np.transpose(selMdlPoints) #reshape((3, num_cls * num_kpt))
-        print (selMdlPoints)
-        print (selMdlPoints.shape)
 
-        # some assertion
-        # exit()
+    print ('selMdlPoints = ', selMdlPoints)
+    print ('selMdlPoints.shape = ', selMdlPoints.shape)
+    print("finishes selecting random points.")
 
     while i < num_images:
 
@@ -311,13 +318,25 @@ if __name__ == '__main__':
         im_syn = np.zeros((height, width, 4), dtype=np.float32)
         depth_syn = np.zeros((height, width, 3), dtype=np.float32)
         vertmap_syn = np.zeros((height, width, 3), dtype=np.float32)
-        class_indexes = -1 * np.ones((num_classes, ), dtype=np.float32)
-        poses = np.zeros((num_classes, 7), dtype=np.float32)
-        centers = np.zeros((num_classes, 2), dtype=np.float32)
+        # class_indexes = -1 * np.ones((num_classes, ), dtype=np.float32)
+        # poses = np.zeros((num_classes, 7), dtype=np.float32)
+        # centers = np.zeros((num_classes, 2), dtype=np.float32)
+        class_indexes = -1 * np.ones((np.sum(num_instances), ), dtype=np.float32)
+        poses = np.zeros((np.sum(num_instances), 7), dtype=np.float32)
+        centers = np.zeros((np.sum(num_instances), 2), dtype=np.float32)
+        # num_instances_ = np.array(num_instances, dtype=np.float32)
         is_sampling = True
-        is_sampling_pose = True
-        synthesizer_.render_python(int(width), int(height), parameters, \
+        is_sampling_pose = False
+
+        synthesizer_.render_python(int(width), int(height), parameters, num_instances_, \
                                    im_syn, depth_syn, vertmap_syn, class_indexes, poses, centers, is_sampling, is_sampling_pose)
+
+        # print('poses =', poses)
+        # print('poses shape =', poses.shape)
+        # print('poses[0,:]', poses[0,:])
+        # print('poses[1,:]', poses[1,:])
+        # print('poses[2,:]', poses[2,:])
+        # exit()  
 
         # convert images
         im_syn = np.clip(255 * im_syn, 0, 255)
@@ -335,29 +354,42 @@ if __name__ == '__main__':
 
         # convert pose
         index = np.where(class_indexes >= 0)[0]
-        num = len(index)
-        qt = np.zeros((3, 4, num), dtype=np.float32)
+        print("class_indexes=", class_indexes)
+        print("index=",index)
+        num = num_classes #len(index)
+        sum_num_inst = np.sum(num_instances)
+        # qt = np.zeros((3, 4, num), dtype=np.float32)
+        qt = np.zeros((3, 4, sum_num_inst), dtype=np.float32)
 
         # whole set of poses, each has whole bounding-box inside FOV
         set_is_qualified = True
+        inst = 0
         for j in xrange(num):
-            ind = index[j]
-            qt[:, :3, j] = quat2mat(poses[ind, :4])
-            qt[:, 3, j] = poses[ind, 4:]
+            for k in xrange(num_instances[j]):
+                ind = index[j]
+                qt[:, :3, inst] = quat2mat(poses[inst, :4])
+                qt[:, 3, inst] = poses[inst, 4:]
 
-            if syn_cfg["check_whole_bb"]:
-                if not is_qualified(qt[:,:,j], extents[j,:], intrinsic_matrix, height, width):
-                    set_is_qualified = False
-                    break
+                inst = inst + 1
+
+                if syn_cfg["check_whole_bb"]:
+                    if not is_qualified(qt[:,:,inst], extents[j,:], intrinsic_matrix, height, width):
+                        set_is_qualified = False
+                        break
 
         if not set_is_qualified:
             continue
 
+        # print('qt[0] =', qt[:,:,0])
+        # print('qt[0] shape =', qt[:,:,0].shape)
+        # print('qt[1] =', qt[:,:,1])
+
+        # if the projected blob of object is too small, then skip it
         flag = 1
         for j in xrange(num):
-            cls = class_indexes[index[j]] + 1
+            cls = index[j] + 1
             I = np.where(label == cls)
-            if len(I[0]) < 800:
+            if len(I[0]) < 800*num_instances[index[j]]:
                 flag = 0
                 break
         if flag == 0:
@@ -368,8 +400,7 @@ if __name__ == '__main__':
         vertmap_syn[np.isnan(vertmap_syn)] = 0
 
         # metadata
-        metadata = {'poses': qt, 'center': centers[class_indexes[index].astype(int), :], \
-                    'cls_indexes': class_indexes[index] + 1, 'intrinsic_matrix': intrinsic_matrix, 'factor_depth': factor_depth}
+        metadata = {'poses': qt.tolist(), 'cls_indexes': (class_indexes[index].astype(int) + 1).tolist()}
 
         # sample a background image
         rgba = im_syn
@@ -417,33 +448,42 @@ if __name__ == '__main__':
         # selMdlPoints = selectModelPoints(num_cls, num_kpt, points[1:,:,:])  # not use the background
 
         im_test = np.array(im, copy=True)
+        inst = 0
         for id in xrange(num_cls):
-            RT = qt[:,:,id]
+            for jj in xrange(num_instances[id]):
 
-            P3d = np.ones((4, num_kpt), dtype=np.float32)
-            P3d[:3,:] = selMdlPoints[:, id*num_kpt : (id+1)*num_kpt]
+                inst_rec = []
+                RT = qt[:,:,inst]
 
-            P3d_c = np.matmul(RT, P3d)
-            p2d = np.matmul(intrinsic_matrix, P3d_c)
-            p2d[0, :] = np.divide(p2d[0, :], p2d[2, :])
-            p2d[1, :] = np.divide(p2d[1, :], p2d[2, :])
+                P3d = np.ones((4, num_kpt), dtype=np.float32)
+                P3d[:3,:] = selMdlPoints[:, id*num_kpt : (id+1)*num_kpt]
 
-            for ii in xrange(p2d.shape[1]):
+                P3d_c = np.matmul(RT, P3d)
+                p2d = np.matmul(intrinsic_matrix, P3d_c)
+                p2d[0, :] = np.divide(p2d[0, :], p2d[2, :])
+                p2d[1, :] = np.divide(p2d[1, :], p2d[2, :])
 
-                p = p2d[:2,ii]
-                status = checkVisibility(width, height, P3d_c[:,ii], p, im_depth_raw / factor_depth)
-                Y2_meta.append( (p2d[0,ii], p2d[1,ii], status, id) )
+                for ii in xrange(p2d.shape[1]):
 
-                if status == 2:
-                    p = p.astype(dtype=np.int)
-                    cv2.circle(im_test, (p[0], p[1]), 3, imdb._class_colors[id], -1)
+                    p = p2d[:2,ii]
+                    status = checkVisibility(width, height, P3d_c[:,ii], p, im_depth_raw / factor_depth)
+                    # Y2_meta.append( (p2d[0,ii], p2d[1,ii], status, id, inst) )
+                    inst_rec.append( (p2d[0,ii], p2d[1,ii], status, id, inst) )
+
+                    if status == 2:
+                        p = p.astype(dtype=np.int)
+                        cv2.circle(im_test, (p[0], p[1]), 3, imdb._class_colors[id], -1)
+                    
+                Y2_meta.append(inst_rec)
+                inst = inst + 1
 
         # save 4Y2 meta
-        filename = root + '{:06d}-cpm_meta.txt'.format(i)      
-        f = open(filename, 'w')
-        for l in xrange(len(Y2_meta)):
-            f.write(str(Y2_meta[l][0]) + ' ' + str(Y2_meta[l][1]) + ' ' + str(Y2_meta[l][2]) + ' ' + str(Y2_meta[l][3]) + '\n')
-        f.close()
+        # filename = root + '{:06d}-cpm_meta.txt'.format(i)      
+        # f = open(filename, 'w')
+        # for l in xrange(len(Y2_meta)):
+        #     f.write(str(Y2_meta[l][0]) + ' ' + str(Y2_meta[l][1]) + ' ' + str(Y2_meta[l][2]) + ' ' + str(Y2_meta[l][3]) + ' ' + str(Y2_meta[l][4]) + '\n')
+        # f.close()
+        metadata['cpm_meta'] = Y2_meta
 
         # visibility verification
         filename = root + '{:06d}-projection.png'.format(i)      
@@ -465,7 +505,10 @@ if __name__ == '__main__':
         cv2.imwrite(filename, label.astype(np.uint8))
 
         # save meta_data
-        filename = root + '{:06d}-meta.mat'.format(i)
-        scipy.io.savemat(filename, metadata, do_compression=True)
+        filename = root + '{:06d}-meta.json'.format(i)
+        # scipy.io.savemat(filename, metadata, do_compression=True)
+        with open(filename, 'w') as fp:
+            json.dump(metadata, fp)
+        # print(metadata)
 
         i += 1

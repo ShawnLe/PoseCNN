@@ -1,9 +1,9 @@
 {
-"num_images": 2000,
-"num_keypoints": 1,
+"num_images": 1500,
+"num_keypoints": 10,
 "sel_random_points": true,
-"random_background": true,
-"check_whole_bb": true,
+"random_background": false,
+"check_whole_bb": false,
 "background_id": 10,
 "height": 480,
 "width": 640,
@@ -16,5 +16,7 @@
         [0.00731, 0.02149, -0.09208],
         [0.02269, -0.01234, -0.01407],
         [-0.00404, -0.04642, 0.00997]
-      ]
+      ],
+"num_instances": [1],
+"factor_depth": 10000.0
 }
