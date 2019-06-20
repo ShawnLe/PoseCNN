@@ -141,6 +141,12 @@ def prepare_augment_from_real_data(mat_file):
             }
 
 
+def writePointsToFile(points, file_name):
+    assert points.shape[0] == 3
+    with open(file_name, 'w') as f:
+        for i in range(points.shape[1]):
+            f.write('{} {} {}\n'.format(points[0,i],points[1,i],points[2,i]))
+
 if __name__ == '__main__':
 
     '''
@@ -173,26 +179,46 @@ if __name__ == '__main__':
     # select random points
     kpt_num = pr['from_json']['num_kpt']
     num_classes = pr['num_cls']
-    if pr['from_json']['syn_cfg']["sel_random_points"]:
-        # selMdlPoints = selectModelPoints(pr['num_cls'], pr['from_json']['num_kpt'], pr['points'][1:,:,:])  # not use the background
-        selMdlPoints = np.zeros([3, num_classes * kpt_num], dtype=np.float32)
-        for i in range(pr['num_cls']):
-            selMdlPoints[:,i*kpt_num:(i+1)*kpt_num] = selectModelPointsBySpatialProp(pr['from_json']['num_kpt'], pr['points'][i+1,:,:], pr['spatial_props'][i])  # not use the background
-            print('selected mdl pts')
-            print(selMdlPoints[:,i*kpt_num:(i+1)*kpt_num])
+
+    assert not (pr['from_json']['syn_cfg']["sel_random_points"] and pr['from_json']['syn_cfg']['selectModelPointsFromFile']), 'Mode is not supported.'
+
+    if pr['from_json']['syn_cfg']['selectModelPointsFromFile']:
+        print('Function under development')
+        exit()
 
     else:
-        selMdlPoints = pr['from_json']['syn_cfg']["selectModelPoints"]
 
-        print (selMdlPoints)
-        print (np.array(selMdlPoints).shape)
-        shape = np.array(selMdlPoints).shape
+        if pr['from_json']['syn_cfg']["sel_random_points"]:
+            # selMdlPoints = selectModelPoints(pr['num_cls'], pr['from_json']['num_kpt'], pr['points'][1:,:,:])  # not use the background
+            selMdlPoints = np.zeros([3, num_classes * kpt_num], dtype=np.float32)
+            for i in range(pr['num_cls']):
+                selMdlPoints[:,i*kpt_num:(i+1)*kpt_num] = selectModelPointsBySpatialProp(pr['from_json']['num_kpt'], pr['points'][i+1,:,:], pr['spatial_props'][i])  # not use the background
+                print('selected mdl pts')
+                print(selMdlPoints[:,i*kpt_num:(i+1)*kpt_num])
 
-        assert (shape[1] == 3) #, "current shape[1] = {}", (shape[1])
-        assert (shape[0] == num_cls * num_kpt)
+            # export selected points to .xyz
+            if  not os.path.exists('selected_points'):
+                os.makedirs('selected_points')
+            else:
+                print('Please backup model point folder before continue.')
+                exit()
 
-        selMdlPoints = np.array(selMdlPoints)
-        selMdlPoints = np.transpose(selMdlPoints) #reshape((3, num_cls * num_kpt))
+            for i in range(pr['num_cls']):
+                file_name = osp.join('selected_points', 'model_{}_points.xyz'.format(i+1))
+                writePointsToFile(selMdlPoints[:,i*kpt_num:(i+1)*kpt_num], file_name)
+
+        else:
+            selMdlPoints = pr['from_json']['syn_cfg']["selectModelPoints"]
+
+            print (selMdlPoints)
+            print (np.array(selMdlPoints).shape)
+            shape = np.array(selMdlPoints).shape
+
+            assert (shape[1] == 3) #, "current shape[1] = {}", (shape[1])
+            assert (shape[0] == num_cls * num_kpt)
+
+            selMdlPoints = np.array(selMdlPoints)
+            selMdlPoints = np.transpose(selMdlPoints) #reshape((3, num_cls * num_kpt))
 
     # iterate and project keypoints
     syn_cfg = pr['from_json']['syn_cfg']
