@@ -473,6 +473,9 @@ class Network(object):
 
     @layer
     def softmax_high_dimension(self, input, num_classes, name):
+        '''
+           softmax = exp(x_i - max(x_i)) / sum{exp(x_i - max(x_i)}
+        '''
         # only use the first input
         if isinstance(input, tuple):
             input = input[0]
@@ -490,6 +493,10 @@ class Network(object):
 
     @layer
     def log_softmax_high_dimension(self, input, num_classes, name):
+        '''
+        log_softmax = (x_i-max(x_i)) - log(sum(exp(xi-max(x_i)))
+        note: log (exp(x_i-max) / sum(exp())) = log(exp(x_i-max)) - log(sum(exp()))) = xi-max(x_i) - log(sum(exp()))
+        '''        
         # only use the first input
         if isinstance(input, tuple):
             input = input[0]
