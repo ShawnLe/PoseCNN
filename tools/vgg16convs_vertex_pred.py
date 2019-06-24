@@ -9,6 +9,9 @@ from math import ceil
 import numpy as np
 from scipy.io import loadmat
 
+import hard_label_layer.hard_label_op as hard_label_op
+import hard_label_layer.hard_label_op_grad
+
 import cv2
 
 import tensorflow as tf
@@ -54,6 +57,41 @@ def dropout(input, keep_prob, name):
     if isinstance(input, tuple):
         input = input[0]
     return tf.nn.dropout(input, keep_prob, name=name)
+
+def argmax_2d(input, name):
+    return tf.to_int32(tf.argmax(input, 3, name))
+
+def softmax_high_dimension(input, num_classes, name):
+
+    # only use the first input
+    if isinstance(input, tuple):
+        input = input[0]
+    input_shape = input.get_shape()
+    ndims = input_shape.ndims
+    array = np.ones(ndims)
+    array[-1] = num_classes
+
+    m = tf.reduce_max(input, reduction_indices=[ndims-1], keep_dims=True)
+    multiples = tf.convert_to_tensor(array, dtype=tf.int32)
+    e = tf.exp(tf.subtract(input, tf.tile(m, multiples)))
+    s = tf.reduce_sum(e, reduction_indices=[ndims-1], keep_dims=True)
+    return tf.div(e, tf.tile(s, multiples))
+
+def log_softmax_high_dimension(input, num_classes, name):
+    # only use the first input
+    if isinstance(input, tuple):
+        input = input[0]
+    input_shape = input.get_shape()
+    ndims = input_shape.ndims
+    array = np.ones(ndims)
+    array[-1] = num_classes
+
+    m = tf.reduce_max(input, reduction_indices=[ndims-1], keep_dims=True)
+    multiples = tf.convert_to_tensor(array, dtype=tf.int32)
+    d = tf.subtract(input, tf.tile(m, multiples))
+    e = tf.exp(d)
+    s = tf.reduce_sum(e, reduction_indices=[ndims-1], keep_dims=True)
+    return tf.subtract(d, tf.log(tf.tile(s, multiples)))
     
 def conv(input, k_h, k_w, c_o, s_h, s_w, name, reuse=None, relu=True, padding=DEFAULT_PADDING, group=1, trainable=True, biased=True, c_i=-1):
     validate_padding(padding)
@@ -397,6 +435,14 @@ class vgg16convs_vertex_pred():
         self.layer_dict['add_score'] = add_score
         self.layer_dict['dropout'] = dropout_
         self.layer_dict['upscore'] = upscore
+
+        score = conv(upscore, 1, 1, self.num_classes, 1, 1, name='score', c_i=self.num_units)
+        prob = log_softmax_high_dimension(score, self.num_classes, name='prob')
+
+        prob_normalized = softmax_high_dimension(score, self.num_classes, name='prob_normalized')
+        label_2d = argmax_2d(prob_normalized, name='label_2d')
+
+        # gt_label_weight = hard_label(, threshold=self.threshold_label, name='gt_label_weight')
 
         if self.vertex_reg : 
             score_conv5_vertex = conv(conv5_3, 1, 1, 128, 1, 1, name='score_conv5_vertex', relu=False, c_i=512)
