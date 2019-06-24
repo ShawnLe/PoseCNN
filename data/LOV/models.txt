@@ -1,1 +1,2 @@
+data/LOV/models/014_almond_box/textured.obj
 data/LOV/models/015_duck_toy/textured.obj

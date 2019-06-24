@@ -1,1 +1,2 @@
+data/LOV/poses/014_almond_box.txt
 data/LOV/poses/015_duck_toy.txt

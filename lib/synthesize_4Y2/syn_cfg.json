@@ -1,6 +1,6 @@
 {
 "num_images": 1500,
-"num_keypoints": 10,
+"num_keypoints": 9,
 "sel_random_points": true,
 "random_background": false,
 "check_whole_bb": false,
@@ -17,7 +17,11 @@
         [0.02269, -0.01234, -0.01407],
         [-0.00404, -0.04642, 0.00997]
       ],
+"extents" : {"mineral": [0.067286, 0.061986, 0.191921], 
+            "duck": [0.093609, 0.071429, 0.072279],
+            "almond": [0.151818, 0.061151, 0.089383]
+},
 "selectModelPointsFromFile" : false,
-"num_instances": [1],
+"num_instances": [1, 2, 2],
 "factor_depth": 10000.0
 }
