@@ -335,7 +335,7 @@ void Synthesizer::loadModels_multi_inst(const std::string filename, float* num_i
 
   int num_classes = model_names.size();
   printf("num_classes = %d\n", num_classes);
-  printf("num_instances = %f %f %f\n", num_instances[0], num_instances[1], num_instances[2]);
+  // printf("num_instances = %f %f %f\n", num_instances[0], num_instances[1], num_instances[2]);
   int sum_num_inst = 0;
   for (int i=0; i<num_classes; i++) 
     sum_num_inst = sum_num_inst + num_instances[i];
@@ -603,7 +603,7 @@ void Synthesizer::render(int width, int height, float fx, float fy, float px, fl
   std::vector<int> class_ids;
 
   printf("num_classes = %d\n", num_classes);
-  printf("num_instances = %f %f %f\n", num_instances[0], num_instances[1], num_instances[2]);
+  // printf("num_instances = %f %f %f\n", num_instances[0], num_instances[1], num_instances[2]);
   int sum_num_inst = 0;
   for (int i=0; i<num_classes; i++) 
     sum_num_inst = sum_num_inst + num_instances[i];

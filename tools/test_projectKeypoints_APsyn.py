@@ -18,6 +18,8 @@ import numpy.linalg as la
 from transforms3d.quaternions import quat2mat
 import cv2
 
+import libsynthesizer
+
 import _init_paths
 from test_synthesis_4Y2 import selectModelPoints, checkVisibility, selectModelPointsBySpatialProp, calc_target_spatial
 
@@ -153,6 +155,67 @@ def writePointsToFile(points, file_name):
         for i in range(points.shape[1]):
             f.write('{} {} {}\n'.format(points[0,i],points[1,i],points[2,i]))
 
+def _load_object_points(xyz_file):
+    '''
+       points_all shape (num,3)
+    '''
+
+    print '[_load_object_points] starts'
+
+    points = []
+    num = np.inf
+
+    point_file = xyz_file
+    print 'point_file = ' + point_file
+    assert os.path.exists(point_file), 'Path does not exist: {}'.format(point_file)
+    points = np.loadtxt(point_file)
+    if points.shape[0] < num:
+        num = points.shape[0]
+
+    points_all = np.zeros((num, 3), dtype=np.float32)
+    points_all[:, :] = points[:num, :]
+
+    return points_all
+
+
+def blend_background(im_syn, im_bkgnd, backgrounds, syn_cfg):
+
+    # sample a background image
+    rgba = im_syn
+
+    if syn_cfg["random_background"]:
+        
+        ind = np.random.randint(len(backgrounds), size=1)[0]
+        filename = backgrounds[ind]
+        print("background is %d named %s chosen" % (ind, filename))                        
+    else:
+
+        if not syn_cfg['syn_merges_real']:
+            ind = syn_cfg["background_id"]
+            filename = backgrounds[ind]
+            print("background %d named %s is chosen" % (ind, filename))     
+
+            background = cv2.imread(filename, cv2.IMREAD_UNCHANGED)
+            try:
+                background = cv2.resize(background, (rgba.shape[1], rgba.shape[0]), interpolation=cv2.INTER_LINEAR)
+            except:
+                background = np.zeros((rgba.shape[0], rgba.shape[1], 3), dtype=np.uint8)
+                print 'bad background image'
+        else:
+            background = im_bkgnd
+  
+    # add background
+    im = np.copy(rgba[:,:,:3])
+    alpha = rgba[:,:,3]
+    I = np.where(alpha == 0)
+    # if cfg.INPUT == 'DEPTH' or cfg.INPUT == 'NORMAL':
+    #     im_depth[I[0],I[1]] = background[I[0], I[1]] / 10
+    # else:
+    im[I[0], I[1], :] = background[I[0], I[1], :3]
+
+    return im
+
+
 class AugmentMerge_AcP_Syn():
 
     def __init__(self):
@@ -162,12 +225,15 @@ class AugmentMerge_AcP_Syn():
         return None
 
 
-    def call_synthesizer(self):
+    def call_synthesizer(self, im_bkgnd, backgrounds):
 
         pr = self.augment_require_params
-        width  =  pr['width']
-        height =  pr['height']
-        parameters = pr['parameters']
+        width  =  pr['from_meta']['width']
+        height =  pr['from_meta']['height']
+        parameters = pr['from_meta']['parameters']
+        print('width | height = ', width, height)
+        num_classes = pr['num_cls']
+        num_instances = pr['from_json']['num_instances']
 
         cad_name = 'data/LOV/models.txt'
         pose_name = 'data/LOV/poses.txt'
@@ -184,7 +250,7 @@ class AugmentMerge_AcP_Syn():
         centers = np.zeros((num_classes, 2), dtype=np.float32)
         is_sampling = True
         is_sampling_pose = True
-        synthesizer_.render_python(int(width), int(height), parameters, \
+        synthesizer_.render_python(int(width), int(height), parameters, num_instances, \
                                 im_syn, depth_syn, vertmap_syn, class_indexes, poses, centers, is_sampling, is_sampling_pose)
 
         # convert images
@@ -206,6 +272,16 @@ class AugmentMerge_AcP_Syn():
         num = len(index)
         qt = np.zeros((3, 4, num), dtype=np.float32)
 
+        im = blend_background(im_syn, im_bkgnd, backgrounds, pr['from_json']['syn_cfg'])
+
+        return {'im_syn' : im#,
+                # 'depth_syn' : depth_syn, 
+                # 'vertmap_syn' : vertmap_syn,
+                # 'class_indexes' : class_indexes,
+                # 'poses' : poses,
+                # 'centers' : centers
+                }
+
 
     def process_selectModelPoints(self):
         '''
@@ -218,12 +294,13 @@ class AugmentMerge_AcP_Syn():
         num_classes = pr['num_cls']
 
         if pr['from_json']['syn_cfg']['selectModelPointsFromFile']:
-            print('Function under development')
-            exit()
+            print('Function under QC')          
 
             selMdlPoints = np.zeros([3, num_classes * kpt_num], dtype=np.float32)
             for i in range(pr['num_cls']):
                 file_name = osp.join('selected_points', 'model_{}_points.xyz'.format(i+1))
+
+                selMdlPoints[:, i*kpt_num:(i+1)*kpt_num] = _load_object_points(file_name).T
 
         else:
 
@@ -262,6 +339,13 @@ class AugmentMerge_AcP_Syn():
         return selMdlPoints
 
 
+    def process_keypoint_projection(self):
+
+
+
+        return None
+
+
     def process(self):
         '''
         read all images
@@ -270,7 +354,8 @@ class AugmentMerge_AcP_Syn():
         # DATA_ROOT = "/media/shawnle/Data0/YCB_Video_Dataset/PoseCNN_Dataset"
         # DATA_ROOT = "/media/shawnle/Data0/YCB_Video_Dataset/YCB_Video_Dataset/data_syn_LOV/Loc_data"
         # DATA_ROOT = "/media/shawnle/Data0/YCB_Video_Dataset/YCB_Video_Dataset/data/0002/"
-        DATA_ROOT = "/media/shawnle/Data0/YCB_Video_Dataset/SLM_datasets/Exhibition/DUCK"
+        # DATA_ROOT = "/media/shawnle/Data0/YCB_Video_Dataset/SLM_datasets/Exhibition/DUCK"
+        DATA_ROOT = "/media/shawnle/Data0/YCB_Video_Dataset/SLM_datasets/Exhibition/POSE_iPBnet_20190621_water_bottle"
         # p = Path(DATA_ROOT)
         # p = osp.dirname(DATA_ROOT)
 
@@ -313,6 +398,13 @@ class AugmentMerge_AcP_Syn():
         imdb = pr['imdb']
         cfg = pr['cfg']
 
+        # load background
+        cache_file = cfg.BACKGROUND
+        if os.path.exists(cache_file):
+            with open(cache_file, 'rb') as fid:
+                backgrounds = cPickle.load(fid)
+            print 'backgrounds loaded from {}'.format(cache_file)
+
         for i in range(cfg.data_num):  #cfg.data_num
 
             # read from real data -- start
@@ -320,22 +412,29 @@ class AugmentMerge_AcP_Syn():
             im = cv2.imread(rgb_name, cv2.IMREAD_UNCHANGED)
             im_test = np.array(im, copy=True)
 
-            depth_name = "{}/{:06d}-depth.png".format(DATA_ROOT,i)
-            im_depth_raw = cv2.imread(depth_name, cv2.IMREAD_UNCHANGED).astype(dtype=np.float32)   # BUG?!
+            # depth_name = "{}/{:06d}-depth.png".format(DATA_ROOT,i)
+            # im_depth_raw = cv2.imread(depth_name, cv2.IMREAD_UNCHANGED).astype(dtype=np.float32)   # BUG?!
 
             # print (p.joinpath("{:06d}-meta.mat".format(x)))
-            mat_file = "{}/{:06d}-meta_rev.json".format(DATA_ROOT,i)
+            mat_file = "{}/{:06d}-meta.json".format(DATA_ROOT,i)
             print "Opening ", mat_file
             with open(mat_file, 'r') as f:
                 meta_dat = json.load(f)
             print (meta_dat)
             # read from real data -- end
 
-            num = pr['num_classes']         
-            poses = np.array(meta_dat['poses']).reshape((4,4,num))
-            print('poses', poses)
+            syn_num_cls = pr['num_classes']
+            num = syn_num_cls
+            # poses = np.array(meta_dat['poses']).reshape((4,4,num))
+            # print('poses', poses)
 
             intrinsic_matrix = np.array(meta_dat['intrinsic_matrix']).reshape((3,3))
+
+            # synthesize a frame -- start
+            self.call_synthesizer(im, backgrounds)
+
+            # synthesize a frame -- end
+            exit()
 
             index = np.where(class_indexes >= 0)[0]
             print("class_indexes=", class_indexes)
@@ -366,11 +465,6 @@ class AugmentMerge_AcP_Syn():
 
             if not set_is_qualified:
                 continue   
-
-            # synthesize a frame -- start
-            self.call_synthesizer()
-
-            # synthesize a frame -- end
 
             # metadata
             # print('poses', qt.tolist())
