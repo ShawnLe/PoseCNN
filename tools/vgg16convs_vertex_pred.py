@@ -224,6 +224,7 @@ class vgg16convs_vertex_pred():
         self.trainable = trainable
         self.num_units = 64
         self.keep_prob_queue = 0.5 #1. 
+        self.threshold_label = .5
         self.scale = 1.
         self.vertex_reg = 1
         self.num_classes = 3
@@ -460,8 +461,7 @@ class vgg16convs_vertex_pred():
         prob_normalized = softmax_high_dimension(score, self.num_classes, name='prob_normalized')
         label_2d = argmax_2d(prob_normalized, name='label_2d')
         self.layer_dict['label_2d'] = label_2d
-
-        self.threshold_label = .5
+        
         gt_label_weight = hard_label([prob_normalized, self.gt_label_2d], threshold=self.threshold_label, name='gt_label_weight')
         self.layer_dict['gt_label_weight'] = gt_label_weight
 
