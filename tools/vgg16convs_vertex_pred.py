@@ -9,6 +9,7 @@ from math import ceil
 import numpy as np
 from scipy.io import loadmat
 
+# from gt_data_layer.minibatch import _process_label_image
 import hard_label_layer.hard_label_op as hard_label_op
 import hard_label_layer.hard_label_op_grad
 
@@ -208,6 +209,30 @@ def load(data_path, session, ignore_missing=False):
                     except ValueError:
                         if not ignore_missing:
                             raise
+
+def _process_label_image(label_image, class_colors, class_weights):
+    """
+    change label image to label index
+    """
+    height = label_image.shape[0]
+    width = label_image.shape[1]
+    num_classes = len(class_colors)
+    label_index = np.zeros((height, width, num_classes), dtype=np.float32)
+
+    if len(label_image.shape) == 3:
+        # label image is in BGR order
+        index = label_image[:,:,2] + 256*label_image[:,:,1] + 256*256*label_image[:,:,0]
+        for i in xrange(len(class_colors)):
+            color = class_colors[i]
+            ind = color[0] + 256*color[1] + 256*256*color[2]
+            I = np.where(index == ind)
+            label_index[I[0], I[1], i] = class_weights[i]
+    else:
+        for i in xrange(len(class_colors)):
+            I = np.where(label_image == i)
+            label_index[I[0], I[1], i] = class_weights[i]
+    
+    return label_index
 
 ############################################################
 #  Network Class
@@ -578,6 +603,9 @@ def _vote_centers(im_label, cls_indexes, center, poses, num_classes):
 
 def get_a_sample(data_path=None, shuffle=True, batch_size=1, num_classes=1):
 
+    print('under development. Refer to data_generator for a reference')
+    exit()
+
     b = 0
     index = -1
     dataset_indexes = prepare_dataset_indexes(data_path)
@@ -587,6 +615,7 @@ def get_a_sample(data_path=None, shuffle=True, batch_size=1, num_classes=1):
     if b == 0:
         # init arrays
         batch_rgb = np.zeros((batch_size, 480, 640, 3), dtype=np.float32)
+        batch_lbl = np.zeros((batch_size, 480, 640), dtype=np.uint8)
         batch_center = np.zeros((batch_size, 480, 640, num_classes * 3), dtype=np.float32)            
 
     index = (index + 1) % len(dataset_indexes)
@@ -607,6 +636,7 @@ def get_a_sample(data_path=None, shuffle=True, batch_size=1, num_classes=1):
     im_lbl = pad_im(cv2.imread(data_rec['label'], cv2.IMREAD_UNCHANGED), 16)
 
     batch_rgb[b,:,:,:] = rgb
+    batch_lbl[b,...] = im_lbl
 
     center_targets, center_weights = _vote_centers(im_lbl, mat['cls_indexes'], mat['center'], mat['poses'], num_classes)
     batch_center[b,:,:,:] = center_targets
@@ -614,7 +644,7 @@ def get_a_sample(data_path=None, shuffle=True, batch_size=1, num_classes=1):
     b = b+1
 
     if b >= batch_size:
-        inputs = batch_rgb
+        inputs = [batch_rgb, batch_lbl]
         outputs = batch_center
 
         b = 0
@@ -628,13 +658,17 @@ def data_generator(data_path=None, shuffle=True, batch_size=1, num_classes=1):
     b = 0
     index = -1
     dataset_indexes = prepare_dataset_indexes(data_path)
+    class_colors = [(255, 255, 0), (255, 0, 255)]
+    class_weights = [1, 1]
 
+    assert len(class_colors) == num_classes and len(class_weights) == num_classes
     print ('dataset size = ' + str(len(dataset_indexes)))
     while True:
 
         if b == 0:
             # init arrays
             batch_rgb = np.zeros((batch_size, 480, 640, 3), dtype=np.float32)
+            batch_lbl = np.zeros((batch_size, 480, 640, num_classes), dtype=np.float32)
             batch_center = np.zeros((batch_size, 480, 640, num_classes * 3), dtype=np.float32)       
             batch_center_weight = np.zeros((batch_size, 480, 640, 3 * num_classes), dtype=np.float32)
 
@@ -654,7 +688,10 @@ def data_generator(data_path=None, shuffle=True, batch_size=1, num_classes=1):
         mat = loadmat(data_rec["meta"])
         im_lbl = pad_im(cv2.imread(data_rec['label'], cv2.IMREAD_UNCHANGED), 16)
 
+        im_cls = _process_label_image(im_lbl, class_colors, class_weights)
+
         batch_rgb[b,:,:,:] = rgb
+        batch_lbl[b,...] = im_cls
 
         center_targets, center_weights = _vote_centers(im_lbl, mat['cls_indexes'], mat['center'], mat['poses'], num_classes)
         batch_center[b,:,:,:] = center_targets
@@ -663,7 +700,7 @@ def data_generator(data_path=None, shuffle=True, batch_size=1, num_classes=1):
         b = b+1
 
         if b >= batch_size:
-            inputs = [batch_rgb]
+            inputs = [batch_rgb, batch_lbl]
             outputs = [batch_center, batch_center_weight]
             # outputs = [np.concatenate([batch_center, batch_center_weight], -1)]
 
@@ -755,6 +792,7 @@ if __name__ == "__main__":
                     continue
 
                 feed_dict = { md.input : inp[0],
+                              md.data_layer['gt_label_2d'] : inp[1],
                               vertex_targets: out[0],
                               vertex_weights: out[1]
                 }
