@@ -44,6 +44,9 @@ def max_pool(input, k_h, k_w, s_h, s_w, name, padding=DEFAULT_PADDING):
                             padding=padding,
                             name=name)
 
+def hard_label(input, threshold, name):
+    return hard_label_op.hard_label(input[0], input[1], threshold, name=name)
+
 def add(inputs, name):
     if isinstance(inputs[0], tuple):
         inputs[0] = inputs[0][0]
@@ -169,7 +172,8 @@ def load(data_path, session, ignore_missing=False):
         '''
         # data_dict = np.load(data_path).item()
         # link: https://stackoverflow.com/questions/38316283/trouble-using-numpy-load
-        data_dict = np.load(data_path, allow_pickle=True, encoding='latin1').item()
+        # data_dict = np.load(data_path, allow_pickle=True, encoding='latin1').item()
+        data_dict = np.load(data_path).item()
         for op_name in data_dict:
             print(op_name) 
             with tf.variable_scope(op_name, reuse=True):
@@ -216,6 +220,7 @@ class vgg16convs_vertex_pred():
 
         # self.input = tf.placeholder(tf.float32, shape=[None, None, None, 3])
         self.input = tf.placeholder(tf.float32, shape=[None, shape[0], shape[1], shape[2]])
+        self.gt_label_2d = tf.placeholder(tf.int32, shape=[None, None, None])
         self.trainable = trainable
         self.num_units = 64
         self.keep_prob_queue = 0.5 #1. 
@@ -356,6 +361,18 @@ class vgg16convs_vertex_pred():
         K.print_tensor(x, message='hello_print') # , [tf.shape(x)]
         return x
 
+    def loss_cross_entropy_single_frame(self, scores, labels):
+        """
+        scores: a tensor [batch_size, height, width, num_classes]
+        labels: a tensor [batch_size, height, width, num_classes]
+        """
+
+        with tf.name_scope('loss'):
+            cross_entropy = -tf.reduce_sum(labels * scores, reduction_indices=[3])
+            loss = tf.div(tf.reduce_sum(cross_entropy), tf.reduce_sum(labels)+1e-10)
+
+        return loss
+
     def smooth_l1_loss_vertex(self, vertex_pred, vertex_targets, vertex_weights, sigma=1.0):
     # def smooth_l1_loss_vertex(self, vertex_targets_, vertex_pred):
 
@@ -438,11 +455,15 @@ class vgg16convs_vertex_pred():
 
         score = conv(upscore, 1, 1, self.num_classes, 1, 1, name='score', c_i=self.num_units)
         prob = log_softmax_high_dimension(score, self.num_classes, name='prob')
+        self.layer_dict['prob'] = prob
 
         prob_normalized = softmax_high_dimension(score, self.num_classes, name='prob_normalized')
         label_2d = argmax_2d(prob_normalized, name='label_2d')
+        self.layer_dict['label_2d'] = label_2d
 
-        # gt_label_weight = hard_label(, threshold=self.threshold_label, name='gt_label_weight')
+        self.threshold_label = .5
+        gt_label_weight = hard_label([prob_normalized, self.gt_label_2d], threshold=self.threshold_label, name='gt_label_weight')
+        self.layer_dict['gt_label_weight'] = gt_label_weight
 
         if self.vertex_reg : 
             score_conv5_vertex = conv(conv5_3, 1, 1, 128, 1, 1, name='score_conv5_vertex', relu=False, c_i=512)
@@ -667,10 +688,12 @@ if __name__ == "__main__":
 
     # data_path = '/home/shawnle/Documents/Restore_PoseCNN/PoseCNN-master/data_syn_LOV/data_2_objs/small'
     # data_path = '/home/shawnle/Documents/Projects/PoseCNN-master/data/LOV/3d_train_data/small'
-    data_path = 'D:\\SL\\3d_train_data\\small'
+    # data_path = 'D:\\SL\\3d_train_data\\small'
+    data_path = '/media/shawnle/Data0/YCB_Video_Dataset/YCB_Video_Dataset/data_syn_LOV/data_2_objs'
     dat_gen = data_generator(data_path, num_classes=num_classes, batch_size=batch_size)
 
-    vgg16_weight_path = '.\\data\\imagenet_models\\vgg16.npy'
+    # vgg16_weight_path = '.\\data\\imagenet_models\\vgg16.npy'
+    vgg16_weight_path = './data/imagenet_models/vgg16.npy'
     sess = tf.Session()
     load(vgg16_weight_path, sess, ignore_missing=True)
 
@@ -682,8 +705,17 @@ if __name__ == "__main__":
     
     print(type(md.layers[-1]))
     print(type(vertex_targets))
+
+    scores = md.layer_dict['prob']
+    labels = md.layer_dict['gt_label_weight']
+    loss_cls = md.loss_cross_entropy_single_frame(scores, labels)
+
+    VERTEX_W = 5
+    loss_vertex = VERTEX_W*md.smooth_l1_loss_vertex(md.layers[-1], vertex_targets, vertex_weights)
+
     # total_loss = mdw.smooth_l1_loss_vertex(ytrue, mdw.vertex_pred)
-    total_loss = md.smooth_l1_loss_vertex(md.layers[-1], vertex_targets, vertex_weights)
+    # total_loss = md.smooth_l1_loss_vertex(md.layers[-1], vertex_targets, vertex_weights)
+    total_loss = loss_cls + loss_vertex
     optimizer = tf.train.MomentumOptimizer(0.0001, 0.9).minimize(total_loss)
 
     ########### tensorboard reports
