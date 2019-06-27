@@ -761,7 +761,7 @@ if __name__ == "__main__":
     #     tf.summary.scalar('total_loss', total_loss)
     #     tf.summary.image('rgb_input', md.input)
 
-    merged = tf.summary.merge_all()
+    # merged = tf.summary.merge_all()
     writer = tf.summary.FileWriter('.')
     writer.add_graph(tf.get_default_graph())
     writer.flush()
@@ -792,14 +792,17 @@ if __name__ == "__main__":
                     continue
 
                 feed_dict = { md.input : inp[0],
-                              md.gt_label_2d : inp[1],
+                              md.gt_label_2d : np.squeeze(inp[1], axis=0),
                               vertex_targets: out[0],
                               vertex_weights: out[1]
                 }
 
-                _, summary, loss, mdinp, mdact, mdact1, out_val, vertex_diff = sess.run([optimizer, merged, total_loss, md.input, md.layers[8][0], md.layers[9][0], md.output, md.output -vertex_targets], feed_dict= feed_dict, options=run_options, run_metadata=run_metadata)
+                assert inp[0] is not None and np.squeeze(inp[1], axis=0) is not None and out[0] is not None and out[1] is not None
 
-                writer.add_summary(summary, epoch)
+                # _, summary, loss, mdinp, mdact, mdact1, out_val, vertex_diff = sess.run([optimizer, merged, total_loss, md.input, md.layers[8][0], md.layers[9][0], md.output, md.output -vertex_targets], feed_dict= feed_dict, options=run_options, run_metadata=run_metadata)
+                _, loss, mdinp, mdact, mdact1, out_val, vertex_diff = sess.run([optimizer, total_loss, md.input, md.layers[8][0], md.layers[9][0], md.output, md.output -vertex_targets], feed_dict= feed_dict, options=run_options, run_metadata=run_metadata)
+
+                # writer.add_summary(summary, epoch)
 
                 # np.save('mdinp_'+ str(iter) +'.npy', mdinp)
                 # np.save('mdact_'+ str(iter) +'.npy', mdact)
