@@ -22,7 +22,9 @@ from fcn.config import cfg
 
 from numpy import linalg as LA
 
-from utils.blob import chromatic_transform
+from utils.blob import chromatic_transform, unpad_im
+
+import matplotlib.pyplot as plt
 
 
 ############################################################
@@ -234,6 +236,28 @@ def _process_label_image(label_image, class_colors, class_weights):
     
     return label_index
 
+
+def labels_to_image(labels):
+    class_colors = [(0,0,0), (255, 255, 0), (255, 0, 255)]  
+    height = labels.shape[0]
+    width = labels.shape[1]
+    image_r = np.zeros((height, width), dtype=np.float32)
+    image_g = np.zeros((height, width), dtype=np.float32)
+    image_b = np.zeros((height, width), dtype=np.float32)
+
+    for i in xrange(1,len(class_colors)):
+        color = class_colors[i]
+        I = np.where(labels == i)
+        print("I ==\n",I)
+        image_r[I] = color[0]
+        image_g[I] = color[1]
+        image_b[I] = color[2]
+
+    image = np.stack((image_r, image_g, image_b), axis=-1)
+
+    return image.astype(np.uint8)
+
+
 ############################################################
 #  Network Class
 ############################################################
@@ -264,11 +288,13 @@ class vgg16convs_vertex_pred():
 
         self.tensorboard_rep()
 
+
     def make_tensor_img(self, inp):
         '''
             0-255 normalization: (x-min)*255 / (max-min)
         '''
-        return tf.div((inp - tf.reduce_min(inp))*tf.constant(255., dtype=tf.float32), (tf.reduce_max(inp) - tf.reduce_min(inp)) )
+        # return tf.div((inp - tf.reduce_min(inp))*tf.constant(255., dtype=tf.float32), (tf.reduce_max(inp) - tf.reduce_min(inp)) )
+        return tf.cast(tf.div((inp - tf.reduce_min(inp))*tf.constant(255., dtype=tf.float32), (tf.reduce_max(inp) - tf.reduce_min(inp)) ), tf.uint8)
 
 
     def tensorboard_rep(self):
@@ -276,39 +302,36 @@ class vgg16convs_vertex_pred():
         print("[tensorboard_rep] running...")
         rep_list = ['vertex_pred', 'add_score_vertex', 'score_conv4_vertex', 'score_conv5_vertex', 'conv5_3', 'conv4_3']
 
-        # with tf.name_scope('summaries') as self.scope:
+        with tf.name_scope('summaries') as self.scope:
         #     # for rep in rep_list:
-        #     shape = self.layer_dict['vertex_pred'].shape
-        #     tensor_img = self.make_tensor_img(tf.slice(self.layer_dict['vertex_pred'], [0,0,0,3], [1, shape[1], shape[2], 1]))
-        #     tf.summary.image('vertex_pred', tensor_img)
-        #     tf.summary.scalar('vertex_pred_max', tf.math.reduce_max(self.layer_dict['vertex_pred']))
-        #     tf.summary.scalar('vertex_pred_min', tf.math.reduce_min(self.layer_dict['vertex_pred']))
+            shape = self.layer_dict['vertex_pred'].shape
+            tensor_img = self.make_tensor_img(tf.slice(self.layer_dict['vertex_pred'], [0,0,0,3], [1, shape[1], shape[2], 1]))
+            tf.summary.image('vertex_pred', tensor_img)
+            # tf.summary.scalar('vertex_pred_max', tf.math.reduce_max(self.layer_dict['vertex_pred']))
+            # tf.summary.scalar('vertex_pred_min', tf.math.reduce_min(self.layer_dict['vertex_pred']))
+
+            tensor_img = self.make_tensor_img(tf.slice(self.layer_dict['vertex_pred'], [0,0,0,4], [1, shape[1], shape[2], 1]))
+            tf.summary.image('vertex_pred', tensor_img)
+            tensor_img = self.make_tensor_img(tf.slice(self.layer_dict['vertex_pred'], [0,0,0,6], [1, shape[1], shape[2], 1]))
+            tf.summary.image('vertex_pred', tensor_img)
+            tensor_img = self.make_tensor_img(tf.slice(self.layer_dict['vertex_pred'], [0,0,0,7], [1, shape[1], shape[2], 1]))
+            tf.summary.image('vertex_pred', tensor_img)
                     
         #     shape = self.layer_dict['add_score_vertex'].shape
         #     tensor_img = self.make_tensor_img(tf.slice(self.layer_dict['add_score_vertex'], [0,0,0,0], [1, shape[1], shape[2], 1]))
         #     tf.summary.image('add_score_vertex', tensor_img)
-        #     tf.summary.scalar('add_score_vertex_max', tf.math.reduce_max(self.layer_dict['add_score_vertex']))
-        #     tf.summary.scalar('add_score_vertex_min', tf.math.reduce_min(self.layer_dict['add_score_vertex']))
 
         #     shape = self.layer_dict['score_conv4_vertex'].shape
         #     tensor_img = self.make_tensor_img(tf.slice(self.layer_dict['score_conv4_vertex'], [0, 0, 0, 0], [1, shape[1], shape[2], 1]))
         #     tf.summary.image('score_conv4_vertex', tensor_img)
-        #     tf.summary.scalar('score_conv4_vertex_max', tf.math.reduce_max(self.layer_dict['score_conv4_vertex']))
-        #     tf.summary.scalar('score_conv4_vertex_min', tf.math.reduce_min(self.layer_dict['score_conv4_vertex']))
 
         #     shape = self.layer_dict['score_conv5_vertex'].shape
         #     tensor_img = self.make_tensor_img(tf.slice(self.layer_dict['score_conv5_vertex'], [0, 0, 0, 0], [1, shape[1], shape[2], 1]))
         #     tf.summary.image('score_conv5_vertex', tensor_img)
-        #     tf.summary.scalar('score_conv5_vertex_max', tf.math.reduce_max(self.layer_dict['score_conv5_vertex']))
-        #     tf.summary.scalar('score_conv5_vertex_min', tf.math.reduce_min(self.layer_dict['score_conv5_vertex']))
-
 
         #     shape = self.layer_dict['conv5_3'].shape
         #     tensor_img = self.make_tensor_img(tf.slice(self.layer_dict['conv5_3'], [0,0,0,0], [1, shape[1], shape[2], 1]))
         #     tf.summary.image('conv5_3', tensor_img)
-        #     tf.summary.scalar('conv5_3_max', tf.math.reduce_max(self.layer_dict['conv5_3']))
-        #     tf.summary.scalar('conv5_3_min', tf.math.reduce_min(self.layer_dict['conv5_3']))
-
 
         #     shape = self.layer_dict['conv4_3'].shape
         #     tensor_img = self.make_tensor_img(tf.slice(self.layer_dict['conv4_3'], [0,0,0,0], [1, shape[1], shape[2], 1]))
@@ -533,6 +556,41 @@ class vgg16convs_vertex_pred():
         print("layers dict: ", self.layer_dict)
 
 
+def restore(session, save_file):
+        reader = tf.train.NewCheckpointReader(save_file)
+        saved_shapes = reader.get_variable_to_shape_map()
+        var_names = sorted([(var.name, var.name.split(':')[0]) for var in tf.global_variables()
+                if var.name.split(':')[0] in saved_shapes])
+
+        var_name_to_var = {var.name : var for var in tf.global_variables()}
+        restore_vars = []
+        restored_var_names = set()
+        print('Restoring:')
+        with tf.variable_scope(tf.get_variable_scope(), reuse=True):
+            for var_name, saved_var_name in var_names:
+                if 'global_step' in var_name:
+                    continue
+                if 'Variable' in var_name:
+                    continue
+                curr_var = var_name_to_var[var_name]
+                var_shape = curr_var.get_shape().as_list()
+                if var_shape == saved_shapes[saved_var_name]:
+                    restore_vars.append(curr_var)
+                    print(str(saved_var_name))
+                    restored_var_names.add(saved_var_name)
+                else:
+                    print('Shape mismatch for var', saved_var_name, 'expected', var_shape, 'got', saved_shapes[saved_var_name])
+        ignored_var_names = sorted(list(set(saved_shapes.keys()) - restored_var_names))
+        if len(ignored_var_names) == 0:
+            print('Restored all variables')
+        else:
+            print('Did not restore:' + '\n\t'.join(ignored_var_names))
+
+        if len(restore_vars) > 0:
+            saver = tf.train.Saver(restore_vars)
+            saver.restore(session, save_file)
+        print('Restored %s' % save_file)
+
 ############################################################
 #  Data Generator
 ############################################################
@@ -602,21 +660,28 @@ def _vote_centers(im_label, cls_indexes, center, poses, num_classes):
 
 
 def get_a_sample(data_path=None, shuffle=True, batch_size=1, num_classes=1):
+    '''
+        num_classes includes the background class
+    '''
 
-    print('under development. Refer to data_generator for a reference')
-    exit()
+    # print('under development. Refer to data_generator for a reference')
+    # exit()
 
     b = 0
     index = -1
     dataset_indexes = prepare_dataset_indexes(data_path)
+    class_colors = [(0,0,0), (255, 255, 0), (255, 0, 255)]  
+    class_weights = [1, 1, 1]
 
-    # print len(dataset_indexes)
+    assert len(class_colors) == num_classes and len(class_weights) == num_classes, "num_classes = " + str(num_classes) 
+    print ('dataset size = ' + str(len(dataset_indexes)))
 
     if b == 0:
         # init arrays
         batch_rgb = np.zeros((batch_size, 480, 640, 3), dtype=np.float32)
-        batch_lbl = np.zeros((batch_size, 480, 640), dtype=np.uint8)
-        batch_center = np.zeros((batch_size, 480, 640, num_classes * 3), dtype=np.float32)            
+        batch_lbl = np.zeros((batch_size, 480, 640, num_classes), dtype=np.float32)
+        batch_center = np.zeros((batch_size, 480, 640, num_classes * 3), dtype=np.float32)       
+        batch_center_weight = np.zeros((batch_size, 480, 640, 3 * num_classes), dtype=np.float32)
 
     index = (index + 1) % len(dataset_indexes)
     if shuffle and index == 0:
@@ -624,8 +689,10 @@ def get_a_sample(data_path=None, shuffle=True, batch_size=1, num_classes=1):
 
     data_rec = dataset_indexes[index]
 
-    rgb_raw = pad_im(cv2.imread(data_rec["color"], cv2.IMREAD_UNCHANGED), 16)
-    cv2.imwrite("rgb_raw.png",rgb_raw)
+    read_im = cv2.imread(data_rec["color"], cv2.IMREAD_UNCHANGED)
+    assert read_im is not None
+    rgb_raw = pad_im(read_im, 16)
+    rgb = rgb_raw
 
     if cfg.TRAIN.CHROMATIC:
         rgb = chromatic_transform(rgb)
@@ -635,17 +702,20 @@ def get_a_sample(data_path=None, shuffle=True, batch_size=1, num_classes=1):
     mat = loadmat(data_rec["meta"])
     im_lbl = pad_im(cv2.imread(data_rec['label'], cv2.IMREAD_UNCHANGED), 16)
 
+    im_cls = _process_label_image(im_lbl, class_colors, class_weights)
+
     batch_rgb[b,:,:,:] = rgb
-    batch_lbl[b,...] = im_lbl
+    batch_lbl[b,...] = im_cls #im_lbl
 
     center_targets, center_weights = _vote_centers(im_lbl, mat['cls_indexes'], mat['center'], mat['poses'], num_classes)
     batch_center[b,:,:,:] = center_targets
+    batch_center_weight[b,:,:,:] = center_weights
 
     b = b+1
 
     if b >= batch_size:
         inputs = [batch_rgb, batch_lbl]
-        outputs = batch_center
+        outputs = [batch_center, batch_center_weight]
 
         b = 0
 
@@ -654,6 +724,9 @@ def get_a_sample(data_path=None, shuffle=True, batch_size=1, num_classes=1):
 
 
 def data_generator(data_path=None, shuffle=True, batch_size=1, num_classes=1):
+    '''
+        num_classes includes the background class
+    '''
 
     b = 0
     index = -1
@@ -678,7 +751,10 @@ def data_generator(data_path=None, shuffle=True, batch_size=1, num_classes=1):
 
         data_rec = dataset_indexes[index]
 
-        rgb_raw = pad_im(cv2.imread(data_rec["color"], cv2.IMREAD_UNCHANGED), 16)
+        read_im = cv2.imread(data_rec["color"], cv2.IMREAD_UNCHANGED)
+        if read_im is None:
+            continue
+        rgb_raw = pad_im(read_im, 16)
 
         if cfg.TRAIN.CHROMATIC:
             rgb_raw = chromatic_transform(rgb_raw)
@@ -715,6 +791,8 @@ def data_generator(data_path=None, shuffle=True, batch_size=1, num_classes=1):
 ############################################################
 
 if __name__ == "__main__":
+
+    mode = 'test' # 'train'        
 
     rgb_shape = (480, 640, 3)
     md = vgg16convs_vertex_pred(shape=rgb_shape, trainable=True)
@@ -756,12 +834,15 @@ if __name__ == "__main__":
     optimizer = tf.train.MomentumOptimizer(0.0001, 0.9).minimize(total_loss)
 
     ########### tensorboard reports
-    # with tf.name_scope('summaries'):
-    # with tf.name_scope(md.scope):
-    #     tf.summary.scalar('total_loss', total_loss)
-    #     tf.summary.image('rgb_input', md.input)
+    with tf.name_scope('summaries'):
+        tf.summary.scalar('total_loss', total_loss)
+        tf.summary.scalar('loss_cls', loss_cls)
+        tf.summary.scalar('loss_vertex', loss_vertex)
+        tf.summary.image('rgb_input', md.input)
+        tf.summary.image('prob', scores)
+        tf.summary.image('label_2d', tf.expand_dims(tf.cast(md.layer_dict['label_2d'], tf.uint8), 3) )
 
-    # merged = tf.summary.merge_all()
+    merged = tf.summary.merge_all()
     writer = tf.summary.FileWriter('.')
     writer.add_graph(tf.get_default_graph())
     writer.flush()
@@ -775,14 +856,39 @@ if __name__ == "__main__":
     iter = 0
     total_step = int(1 / batch_size)
     print("total step per epoch = ", total_step)
+    saver = tf.train.Saver()
     with tf.Session(config=config) as sess:
 
         run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
         run_metadata = tf.RunMetadata()
 
+        if mode is 'test' :
+
+            restore(sess, './output/vertex_pred/model.ckpt')
+
+            print('load model successfully!')
+
+            inp, out = get_a_sample(data_path, num_classes=3)
+
+            feed_dict = { md.input : inp[0],
+                          md.gt_label_2d : np.squeeze(inp[1], axis=0), 
+                          vertex_targets: out[0],
+                          vertex_weights: out[1] }
+
+            summary, out_val, labels = sess.run([merged, md.output, md.layer_dict['label_2d']], feed_dict= feed_dict, options=run_options, run_metadata=run_metadata)
+
+            print('amax rgb, lbl, tgt, w, est lb =', np.amax(inp[0]), np.amax(inp[1]), np.amax(out[0]), np.amax(out[1]), np.amax(labels))
+            print('labels shape = ', labels, type(labels), labels.shape)#, tf.shape(labels[0][0][0]))
+            imgplot = plt.imshow(labels[0,...])
+            plt.show()
+            print("finished.")
+
+            exit()
+
+
         sess.run(tf.global_variables_initializer(), options=run_options, run_metadata=run_metadata)
 
-        for epoch in range(1000):
+        for epoch in range(5000):
             for step in range(total_step):
                 inp, out = next(dat_gen)
 
@@ -799,10 +905,15 @@ if __name__ == "__main__":
 
                 assert inp[0] is not None and np.squeeze(inp[1], axis=0) is not None and out[0] is not None and out[1] is not None
 
-                # _, summary, loss, mdinp, mdact, mdact1, out_val, vertex_diff = sess.run([optimizer, merged, total_loss, md.input, md.layers[8][0], md.layers[9][0], md.output, md.output -vertex_targets], feed_dict= feed_dict, options=run_options, run_metadata=run_metadata)
-                _, loss, mdinp, mdact, mdact1, out_val, vertex_diff = sess.run([optimizer, total_loss, md.input, md.layers[8][0], md.layers[9][0], md.output, md.output -vertex_targets], feed_dict= feed_dict, options=run_options, run_metadata=run_metadata)
+                _, summary, loss, mdinp, mdact, mdact1, out_val, labels = sess.run([optimizer, merged, total_loss, md.input, md.layers[8][0], md.layers[9][0], md.output, md.layer_dict['label_2d']], feed_dict= feed_dict, options=run_options, run_metadata=run_metadata)
+                # _, loss, mdinp, mdact, mdact1, out_val, vertex_diff = sess.run([optimizer, total_loss, md.input, md.layers[8][0], md.layers[9][0], md.output, md.output -vertex_targets], feed_dict= feed_dict, options=run_options, run_metadata=run_metadata)
 
-                # writer.add_summary(summary, epoch)
+                # labels = unpad_im(labels, 16)
+                # im_label = labels_to_image(labels)
+                # cv2.imshow("im_label", im_label)
+                # cv2.waitKey(1)
+
+                writer.add_summary(summary, epoch)
 
                 # np.save('mdinp_'+ str(iter) +'.npy', mdinp)
                 # np.save('mdact_'+ str(iter) +'.npy', mdact)
@@ -812,4 +923,8 @@ if __name__ == "__main__":
 
                 print('iter ' + str(iter) + '/' + str(epoch) + ': --> loss:', loss)
                 iter = iter + 1
+
+                if iter % 200 == 0:
+                    save_path = saver.save(sess, "./output/vertex_pred/model.ckpt")
+                    print("Model saved in path: %s" % save_path)
 
