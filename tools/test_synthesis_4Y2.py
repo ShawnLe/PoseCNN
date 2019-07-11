@@ -76,38 +76,59 @@ def parse_args():
     return args
 
 
+def vertice_is_good(*args, **kwargs):
 
-def vertice_is_good(kpt_num, selMdlPoints, points, class_num, sel_num, vt_id):
+    def vertice_is_good_v2(kpt_num, selMdlPoints, points, class_num, sel_num, vt_id):
 
-    ret = True
-    dist_thres = .010 #.020  -> tuned depneding on object size
-    
-    current_point =  points[class_num, vt_id, :]
+        ret = True
+        dist_thres = .010 #.020  -> tuned depneding on object size
+        
+        current_point =  points[class_num, vt_id, :]
 
-    for i in xrange(kpt_num*class_num, kpt_num*class_num +sel_num):
-        chosen_point = selMdlPoints[:,i]
+        for i in xrange(kpt_num*class_num, kpt_num*class_num +sel_num):
+            chosen_point = selMdlPoints[:,i]
 
-        if LA.norm(chosen_point -current_point) < dist_thres:
-            ret = False
-            break
-    return ret
+            if LA.norm(chosen_point -current_point) < dist_thres:
+                ret = False
+                break
+        return ret
 
-def vertice_is_good(kpt_num, selMdlPoints, points, sel_num, vt_id):
 
-    assert points.shape[1] == 3
+    def vertice_is_good_v1(kpt_num, selMdlPoints, points, sel_num, vt_id):
 
-    ret = True
-    dist_thres = .010 #.020  -> tuned depneding on object size
-    
-    current_point =  points[vt_id, :]
+        assert points.shape[1] == 3
 
-    for i in xrange(0, sel_num):
-        chosen_point = selMdlPoints[:,i]
+        ret = True
+        dist_thres = .010 #.020  -> tuned depneding on object size
+        
+        current_point =  points[vt_id, :]
 
-        if LA.norm(chosen_point -current_point) < dist_thres:
-            ret = False
-            break
-    return ret
+        for i in xrange(0, sel_num):
+            chosen_point = selMdlPoints[:,i]
+
+            if LA.norm(chosen_point -current_point) < dist_thres:
+                ret = False
+                break
+        return ret
+
+    if len(args) == 6: 
+        a0 = args[0]
+        a1 = args[1]
+        a2 = args[2]
+        a3 = args[3]
+        a4 = args[4]
+        a5 = args[5]
+        return vertice_is_good_v2(a0,a1,a2,a3,a4,a5)
+    elif len(args) == 5:
+        a0 = args[0]
+        a1 = args[1]
+        a2 = args[2]
+        a3 = args[3]
+        a4 = args[4]
+        return vertice_is_good_v1(a0,a1,a2,a3,a4)
+    else:
+        print('number of arguments is not supported.')
+
 
 def calc_target_spatial(class_pts):
 
