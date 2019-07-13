@@ -10,7 +10,7 @@
 '''
 import os, sys
 import os.path as osp
-import cPickle
+import pickle #cPickle
 import json
 
 import numpy as np
@@ -18,12 +18,41 @@ import numpy.linalg as la
 from transforms3d.quaternions import quat2mat
 import cv2
 
-import libsynthesizer
+# import libsynthesizer
 
 import _init_paths
 from test_synthesis_4Y2 import selectModelPoints, checkVisibility, selectModelPointsBySpatialProp, calc_target_spatial
 
-from datasets.factory import get_imdb
+# from datasets.factory import get_imdb
+from imdb import imdb
+
+'''
+############################### ref: PoseCNN 
+@dependency: this code has to run with imdb.py of PoseCNN. Dependency on lov.py and factory.py have been resolved
+'''
+
+__sets = {}
+
+class lov(imdb):
+    def __init__(self):
+        pass   
+
+
+# lov dataset
+for split in ['train', 'val', 'keyframe', 'trainval', 'debug', 'train_few', 'val_few']:
+    name = 'lov_{}'.format(split)
+    print (name)
+    __sets[name] = (lambda split=split: lov(split))
+
+def get_imdb(name):
+    """Get an imdb (image database) by name."""
+    if not __sets.has_key(name):
+        raise KeyError('Unknown dataset: {}'.format(name))
+    return __sets[name]()
+
+'''
+############################### ref: PoseCNN 
+'''
 
 class config():
     def __init__(self):
@@ -41,7 +70,7 @@ def prepare_augment_from_real_data(mat_file):
     def prepare_from_json(imdb):
 
         myfile = os.path.join(os.getcwd(), 'lib','synthesize_4Y2', 'syn_cfg.json')
-        print "Opening ", myfile
+        print ("Opening ", myfile)
         with open(myfile, 'r') as f:
             syn_cfg=json.load(f)
 
@@ -83,7 +112,7 @@ def prepare_augment_from_real_data(mat_file):
 
     def prepare_from_real_data(mat_file):
 
-        print "Opening ", mat_file
+        print("Opening ", mat_file)
         with open(mat_file, 'r') as f:
             meta = json.load(f)
         
@@ -160,13 +189,13 @@ def _load_object_points(xyz_file):
        points_all shape (num,3)
     '''
 
-    print '[_load_object_points] starts'
+    print( '[_load_object_points] starts')
 
     points = []
     num = np.inf
 
     point_file = xyz_file
-    print 'point_file = ' + point_file
+    print( 'point_file = ' + point_file)
     assert os.path.exists(point_file), 'Path does not exist: {}'.format(point_file)
     points = np.loadtxt(point_file)
     if points.shape[0] < num:
@@ -200,7 +229,7 @@ def blend_background(im_syn, im_bkgnd, backgrounds, syn_cfg):
                 background = cv2.resize(background, (rgba.shape[1], rgba.shape[0]), interpolation=cv2.INTER_LINEAR)
             except:
                 background = np.zeros((rgba.shape[0], rgba.shape[1], 3), dtype=np.uint8)
-                print 'bad background image'
+                print( 'bad background image')
         else:
             background = im_bkgnd
   
@@ -402,8 +431,8 @@ class AugmentMerge_AcP_Syn():
         cache_file = cfg.BACKGROUND
         if os.path.exists(cache_file):
             with open(cache_file, 'rb') as fid:
-                backgrounds = cPickle.load(fid)
-            print 'backgrounds loaded from {}'.format(cache_file)
+                backgrounds = pickle.load(fid)
+            print( 'backgrounds loaded from {}'.format(cache_file))
 
         for i in range(cfg.data_num):  #cfg.data_num
 
@@ -417,7 +446,7 @@ class AugmentMerge_AcP_Syn():
 
             # print (p.joinpath("{:06d}-meta.mat".format(x)))
             mat_file = "{}/{:06d}-meta.json".format(DATA_ROOT,i)
-            print "Opening ", mat_file
+            print( "Opening ", mat_file)
             with open(mat_file, 'r') as f:
                 meta_dat = json.load(f)
             print (meta_dat)
@@ -524,7 +553,7 @@ class AugmentMerge_AcP_Syn():
             # visibility verification
             filename = root + '{:06d}-projection.png'.format(i)      
             cv2.imwrite(filename, im_test)
-            print filename
+            print( filename)
 
             # save meta_data
             filename = root + '{:06d}-meta_cpm.json'.format(i)
