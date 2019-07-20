@@ -237,25 +237,30 @@ def _process_label_image(label_image, class_colors, class_weights):
     return label_index
 
 
-def labels_to_image(labels):
-    class_colors = [(0,0,0), (255, 255, 0), (255, 0, 255)]  
-    height = labels.shape[0]
-    width = labels.shape[1]
-    image_r = np.zeros((height, width), dtype=np.float32)
-    image_g = np.zeros((height, width), dtype=np.float32)
-    image_b = np.zeros((height, width), dtype=np.float32)
+def labels_to_image_tensor(labels):
+    '''
+      adapt from PCNN
+    '''
+    class_colors = tf.constant([(0,0,0), (255, 255, 0), (255, 0, 255)])
 
-    for i in xrange(1,len(class_colors)):
+    height = labels.get_shape().as_list()[1]
+    width = labels.get_shape().as_list()[2]
+    image_r = tf.zeros((height, width), dtype=tf.float32)
+    image_g = tf.zeros((height, width), dtype=tf.float32)
+    image_b = tf.zeros((height, width), dtype=tf.float32)
+
+    # for i in xrange(1,len(class_colors)):
+    for i in xrange(1,3):
         color = class_colors[i]
-        I = np.where(labels == i)
-        print("I ==\n",I)
-        image_r[I] = color[0]
-        image_g[I] = color[1]
-        image_b[I] = color[2]
+        I = tf.where(tf.equal(labels,i)) #labels == i
+        print("I ={}, i={}".format(I,i))
+        # image_r[I] = color[0]
+        # image_g[I] = color[1]
+        # image_b[I] = color[2]
 
-    image = np.stack((image_r, image_g, image_b), axis=-1)
+    # image = np.stack((image_r, image_g, image_b), axis=-1)
 
-    return image.astype(np.uint8)
+    return tf.scalar_mul(tf.constant([50], dtype=tf.int32, shape=[]), labels) # image.astype(np.uint8)
 
 
 ############################################################
@@ -294,7 +299,8 @@ class vgg16convs_vertex_pred():
             0-255 normalization: (x-min)*255 / (max-min)
         '''
         # return tf.div((inp - tf.reduce_min(inp))*tf.constant(255., dtype=tf.float32), (tf.reduce_max(inp) - tf.reduce_min(inp)) )
-        return tf.cast(tf.div((inp - tf.reduce_min(inp))*tf.constant(255., dtype=tf.float32), (tf.reduce_max(inp) - tf.reduce_min(inp)) ), tf.uint8)
+        #return tf.cast(tf.div((inp - tf.reduce_min(inp))*tf.constant(255., dtype=tf.float32), (tf.reduce_max(inp) - tf.reduce_min(inp)) ), tf.uint8)
+        return tf.div((inp - tf.reduce_min(inp))*tf.constant(255., dtype=tf.float32), (tf.reduce_max(inp) - tf.reduce_min(inp)))
 
 
     def tensorboard_rep(self):
@@ -310,6 +316,21 @@ class vgg16convs_vertex_pred():
             # tf.summary.scalar('vertex_pred_max', tf.math.reduce_max(self.layer_dict['vertex_pred']))
             # tf.summary.scalar('vertex_pred_min', tf.math.reduce_min(self.layer_dict['vertex_pred']))
 
+            upscore = self.layer_dict['upscore'] 
+            tf.summary.scalar('upscore_sum_abs', tf.reduce_sum(tf.abs(upscore)))
+            score = self.layer_dict['score'] 
+            tf.summary.scalar('score_sum_abs', tf.reduce_sum(tf.abs(score)))
+            prob = self.layer_dict['prob'] 
+            tf.summary.scalar('prob_sum_abs', tf.reduce_sum(tf.abs(prob)))
+            prob_normalized = self.layer_dict['prob_normalized'] 
+            tf.summary.scalar('prob_normalized_sum_abs', tf.reduce_sum(tf.abs(prob_normalized)))
+            tensor_img = self.make_tensor_img(tf.slice(self.layer_dict['prob_normalized'], [0,0,0,0], [1, shape[1], shape[2], 1]))
+            tf.summary.image('prob_normalized_0', tensor_img)
+            tensor_img = self.make_tensor_img(tf.slice(self.layer_dict['prob_normalized'], [0,0,0,1], [1, shape[1], shape[2], 1]))
+            tf.summary.image('prob_normalized_1', tensor_img)
+            tensor_img = self.make_tensor_img(tf.slice(self.layer_dict['prob_normalized'], [0,0,0,2], [1, shape[1], shape[2], 1]))
+            tf.summary.image('prob_normalized_2', tensor_img)
+
             tensor_img = self.make_tensor_img(tf.slice(self.layer_dict['vertex_pred'], [0,0,0,4], [1, shape[1], shape[2], 1]))
             tf.summary.image('vertex_pred', tensor_img)
             tensor_img = self.make_tensor_img(tf.slice(self.layer_dict['vertex_pred'], [0,0,0,6], [1, shape[1], shape[2], 1]))
@@ -317,85 +338,108 @@ class vgg16convs_vertex_pred():
             tensor_img = self.make_tensor_img(tf.slice(self.layer_dict['vertex_pred'], [0,0,0,7], [1, shape[1], shape[2], 1]))
             tf.summary.image('vertex_pred', tensor_img)
                     
-        #     shape = self.layer_dict['add_score_vertex'].shape
-        #     tensor_img = self.make_tensor_img(tf.slice(self.layer_dict['add_score_vertex'], [0,0,0,0], [1, shape[1], shape[2], 1]))
-        #     tf.summary.image('add_score_vertex', tensor_img)
+            shape = self.layer_dict['add_score_vertex'].shape
+            tensor_img = self.make_tensor_img(tf.slice(self.layer_dict['add_score_vertex'], [0,0,0,0], [1, shape[1], shape[2], 1]))
+            tf.summary.image('add_score_vertex', tensor_img)
 
-        #     shape = self.layer_dict['score_conv4_vertex'].shape
-        #     tensor_img = self.make_tensor_img(tf.slice(self.layer_dict['score_conv4_vertex'], [0, 0, 0, 0], [1, shape[1], shape[2], 1]))
-        #     tf.summary.image('score_conv4_vertex', tensor_img)
+            shape = self.layer_dict['score_conv4_vertex'].shape
+            tensor_img = self.make_tensor_img(tf.slice(self.layer_dict['score_conv4_vertex'], [0, 0, 0, 0], [1, shape[1], shape[2], 1]))
+            tf.summary.image('score_conv4_vertex', tensor_img)
 
-        #     shape = self.layer_dict['score_conv5_vertex'].shape
-        #     tensor_img = self.make_tensor_img(tf.slice(self.layer_dict['score_conv5_vertex'], [0, 0, 0, 0], [1, shape[1], shape[2], 1]))
-        #     tf.summary.image('score_conv5_vertex', tensor_img)
+            shape = self.layer_dict['score_conv5_vertex'].shape
+            tensor_img = self.make_tensor_img(tf.slice(self.layer_dict['score_conv5_vertex'], [0, 0, 0, 0], [1, shape[1], shape[2], 1]))
+            tf.summary.image('score_conv5_vertex', tensor_img)
 
-        #     shape = self.layer_dict['conv5_3'].shape
-        #     tensor_img = self.make_tensor_img(tf.slice(self.layer_dict['conv5_3'], [0,0,0,0], [1, shape[1], shape[2], 1]))
-        #     tf.summary.image('conv5_3', tensor_img)
+            shape = self.layer_dict['conv5_3'].shape
+            tensor_img = self.make_tensor_img(tf.slice(self.layer_dict['conv5_3'], [0,0,0,0], [1, shape[1], shape[2], 1]))
+            tf.summary.image('conv5_3', tensor_img)
 
-        #     shape = self.layer_dict['conv4_3'].shape
-        #     tensor_img = self.make_tensor_img(tf.slice(self.layer_dict['conv4_3'], [0,0,0,0], [1, shape[1], shape[2], 1]))
-        #     tf.summary.image('conv4_3', tensor_img)
+            shape = self.layer_dict['conv4_3'].shape
+            tensor_img = self.make_tensor_img(tf.slice(self.layer_dict['conv4_3'], [0,0,0,0], [1, shape[1], shape[2], 1]))
+            tf.summary.image('conv4_3', tensor_img)
 
-        #     shape = self.layer_dict['conv1_1'].shape
-        #     tensor_img = self.make_tensor_img(tf.slice(self.layer_dict['conv1_1'], [0,0,0,0], [1, shape[1], shape[2], 1]))
-        #     tf.summary.image('conv1_1', tensor_img)
+            shape = self.layer_dict['conv1_1'].shape
+            tensor_img = self.make_tensor_img(tf.slice(self.layer_dict['conv1_1'], [0,0,0,0], [1, shape[1], shape[2], 1]))
+            tf.summary.image('conv1_1', tensor_img)
 
-        #     shape = self.layer_dict['conv1_2'].shape
-        #     tensor_img = self.make_tensor_img(tf.slice(self.layer_dict['conv1_2'], [0,0,0,0], [1, shape[1], shape[2], 1]))
-        #     tf.summary.image('conv1_2', tensor_img)
+            shape = self.layer_dict['conv1_2'].shape
+            tensor_img = self.make_tensor_img(tf.slice(self.layer_dict['conv1_2'], [0,0,0,0], [1, shape[1], shape[2], 1]))
+            tf.summary.image('conv1_2', tensor_img)
 
-        #     shape = self.layer_dict['pool1'].shape
-        #     tensor_img = self.make_tensor_img(tf.slice(self.layer_dict['pool1'], [0,0,0,0], [1, shape[1], shape[2], 1]))
-        #     tf.summary.image('pool1', tensor_img)
+            shape = self.layer_dict['pool1'].shape
+            tensor_img = self.make_tensor_img(tf.slice(self.layer_dict['pool1'], [0,0,0,0], [1, shape[1], shape[2], 1]))
+            tf.summary.image('pool1', tensor_img)
 
-        #     shape = self.layer_dict['conv2_1'].shape
-        #     tensor_img = self.make_tensor_img(tf.slice(self.layer_dict['conv2_1'], [0,0,0,0], [1, shape[1], shape[2], 1]))
-        #     tf.summary.image('conv2_1', tensor_img)
+            shape = self.layer_dict['conv2_1'].shape
+            tensor_img = self.make_tensor_img(tf.slice(self.layer_dict['conv2_1'], [0,0,0,0], [1, shape[1], shape[2], 1]))
+            tf.summary.image('conv2_1', tensor_img)
 
-        #     shape = self.layer_dict['conv2_2'].shape
-        #     tensor_img = self.make_tensor_img(tf.slice(self.layer_dict['conv2_2'], [0,0,0,0], [1, shape[1], shape[2], 1]))
-        #     tf.summary.image('conv2_2', tensor_img)
+            shape = self.layer_dict['conv2_2'].shape
+            tensor_img = self.make_tensor_img(tf.slice(self.layer_dict['conv2_2'], [0,0,0,0], [1, shape[1], shape[2], 1]))
+            tf.summary.image('conv2_2', tensor_img)
 
-        #     shape = self.layer_dict['pool2'].shape
-        #     tensor_img = self.make_tensor_img(tf.slice(self.layer_dict['pool2'], [0,0,0,0], [1, shape[1], shape[2], 1]))
-        #     tf.summary.image('pool2', tensor_img)
+            shape = self.layer_dict['pool2'].shape
+            tensor_img = self.make_tensor_img(tf.slice(self.layer_dict['pool2'], [0,0,0,0], [1, shape[1], shape[2], 1]))
+            tf.summary.image('pool2', tensor_img)
 
-        #     shape = self.layer_dict['conv3_1'].shape
-        #     tensor_img = self.make_tensor_img(tf.slice(self.layer_dict['conv3_1'], [0,0,0,0], [1, shape[1], shape[2], 1]))
-        #     tf.summary.image('conv3_1', tensor_img)
+            shape = self.layer_dict['conv3_1'].shape
+            tensor_img = self.make_tensor_img(tf.slice(self.layer_dict['conv3_1'], [0,0,0,0], [1, shape[1], shape[2], 1]))
+            tf.summary.image('conv3_1', tensor_img)
 
-        #     shape = self.layer_dict['conv3_2'].shape
-        #     tensor_img = self.make_tensor_img(tf.slice(self.layer_dict['conv3_2'], [0,0,0,0], [1, shape[1], shape[2], 1]))
-        #     tf.summary.image('conv3_2', tensor_img)
+            shape = self.layer_dict['conv3_2'].shape
+            tensor_img = self.make_tensor_img(tf.slice(self.layer_dict['conv3_2'], [0,0,0,0], [1, shape[1], shape[2], 1]))
+            tf.summary.image('conv3_2', tensor_img)
 
-        #     shape = self.layer_dict['conv3_3'].shape
-        #     tensor_img = self.make_tensor_img(tf.slice(self.layer_dict['conv3_3'], [0,0,0,0], [1, shape[1], shape[2], 1]))
-        #     tf.summary.image('conv3_3', tensor_img)            
+            shape = self.layer_dict['conv3_3'].shape
+            tensor_img = self.make_tensor_img(tf.slice(self.layer_dict['conv3_3'], [0,0,0,0], [1, shape[1], shape[2], 1]))
+            tf.summary.image('conv3_3', tensor_img)            
+            with tf.variable_scope("conv3_3", reuse=True) as scope:
+                W = tf.get_variable("weights")
+                b = tf.get_variable("biases")
+                tf.summary.scalar('conv3_1_W_sum', tf.reduce_sum(tf.abs(W)))
+                tf.summary.scalar('conv3_1_b_sum', tf.reduce_sum(tf.abs(b)))
 
-        #     shape = self.layer_dict['pool3'].shape
-        #     tensor_img = self.make_tensor_img(tf.slice(self.layer_dict['pool3'], [0,0,0,0], [1, shape[1], shape[2], 1]))
-        #     tf.summary.image('pool3', tensor_img)
+            shape = self.layer_dict['pool3'].shape
+            tensor_img = self.make_tensor_img(tf.slice(self.layer_dict['pool3'], [0,0,0,0], [1, shape[1], shape[2], 1]))
+            tf.summary.image('pool3', tensor_img)    
 
-        #     shape = self.layer_dict['conv4_1'].shape
-        #     tensor_img = self.make_tensor_img(tf.slice(self.layer_dict['conv4_1'], [0,0,0,0], [1, shape[1], shape[2], 1]))
-        #     tf.summary.image('conv4_1', tensor_img)
+            shape = self.layer_dict['conv4_1'].shape
+            tensor_img = self.make_tensor_img(tf.slice(self.layer_dict['conv4_1'], [0,0,0,0], [1, shape[1], shape[2], 1]))
+            tf.summary.image('conv4_1', tensor_img)
+            tf.summary.scalar('conv4_1_sum', tf.reduce_sum(self.layer_dict['conv4_1']))
+            tf.summary.scalar('conv4_1_image_max', tf.reduce_max(tensor_img))
+            tf.summary.scalar('conv4_1_image_min', tf.reduce_min(tensor_img))
+            with tf.variable_scope("conv4_1", reuse=True) as scope:
+                W = tf.get_variable("weights")
+                b = tf.get_variable("biases")
+                tf.summary.scalar('conv4_1_W_sum', tf.reduce_sum(tf.abs(W)))
+                tf.summary.scalar('conv4_1_b_sum', tf.reduce_sum(tf.abs(b)))
 
-        #     shape = self.layer_dict['conv4_2'].shape
-        #     tensor_img = self.make_tensor_img(tf.slice(self.layer_dict['conv4_2'], [0,0,0,0], [1, shape[1], shape[2], 1]))
-        #     tf.summary.image('conv4_2', tensor_img)
+            # conv4_1_W = tf.get_variable("my_variable", [1, 2, 3])
+            # print('all tensors = \n',[n.name for n in tf.get_default_graph().as_graph_def().node])
 
-        #     shape = self.layer_dict['pool4'].shape
-        #     tensor_img = self.make_tensor_img(tf.slice(self.layer_dict['pool4'], [0,0,0,0], [1, shape[1], shape[2], 1]))
-        #     tf.summary.image('pool4', tensor_img)
+            shape = self.layer_dict['conv4_2'].shape
+            tensor_img = self.make_tensor_img(tf.slice(self.layer_dict['conv4_2'], [0,0,0,0], [1, shape[1], shape[2], 1]))
+            tf.summary.image('conv4_2', tensor_img)
 
-        #     shape = self.layer_dict['conv5_1'].shape
-        #     tensor_img = self.make_tensor_img(tf.slice(self.layer_dict['conv5_1'], [0,0,0,0], [1, shape[1], shape[2], 1]))
-        #     tf.summary.image('conv5_1', tensor_img)
+            shape = self.layer_dict['pool4'].shape
+            tensor_img = self.make_tensor_img(tf.slice(self.layer_dict['pool4'], [0,0,0,0], [1, shape[1], shape[2], 1]))
+            tf.summary.image('pool4', tensor_img)
+            tf.summary.scalar('pool4_sum_abs', tf.reduce_sum(tf.abs(self.layer_dict['pool4'])))
 
-        #     shape = self.layer_dict['conv5_2'].shape
-        #     tensor_img = self.make_tensor_img(tf.slice(self.layer_dict['conv5_2'], [0,0,0,0], [1, shape[1], shape[2], 1]))
-        #     tf.summary.image('conv5_2', tensor_img)
+            shape = self.layer_dict['conv5_1'].shape
+            tensor_img = self.make_tensor_img(tf.slice(self.layer_dict['conv5_1'], [0,0,0,0], [1, shape[1], shape[2], 1]))
+            tf.summary.image('conv5_1', tensor_img)
+            tf.summary.scalar('conv5_1_sum', tf.reduce_sum(self.layer_dict['conv5_1']))
+            with tf.variable_scope("conv5_1", reuse=True) as scope:
+                W = tf.get_variable("weights")
+                b = tf.get_variable("biases")
+                tf.summary.scalar('conv5_1_W_sum', tf.reduce_sum(tf.abs(W)))
+                tf.summary.scalar('conv5_1_b_sum', tf.reduce_sum(tf.abs(b)))
+
+            shape = self.layer_dict['conv5_2'].shape
+            tensor_img = self.make_tensor_img(tf.slice(self.layer_dict['conv5_2'], [0,0,0,0], [1, shape[1], shape[2], 1]))
+            tf.summary.image('conv5_2', tensor_img)
 
             # shape = self.layer_dict['upscore_vertex_conv'].shape
             # tensor_img = self.make_tensor_img(tf.slice(self.layer_dict['upscore_vertex_conv'], [0,0,0,0], [1, shape[1], shape[2], 1]))
@@ -505,10 +549,12 @@ class vgg16convs_vertex_pred():
         score = conv(upscore, 1, 1, self.num_classes, 1, 1, name='score', c_i=self.num_units)
         prob = log_softmax_high_dimension(score, self.num_classes, name='prob')
         self.layer_dict['prob'] = prob
+        self.layer_dict['score'] = score
 
         prob_normalized = softmax_high_dimension(score, self.num_classes, name='prob_normalized')
         label_2d = argmax_2d(prob_normalized, name='label_2d')
         self.layer_dict['label_2d'] = label_2d
+        self.layer_dict['prob_normalized'] = prob_normalized
         
         gt_label_weight = hard_label([prob_normalized, self.gt_label_2d], threshold=self.threshold_label, name='gt_label_weight')
         self.layer_dict['gt_label_weight'] = gt_label_weight
@@ -792,10 +838,10 @@ def data_generator(data_path=None, shuffle=True, batch_size=1, num_classes=1):
 
 if __name__ == "__main__":
 
-    mode = 'test' # 'train'        
+    mode = 'train'    # 'test' # 
 
     rgb_shape = (480, 640, 3)
-    md = vgg16convs_vertex_pred(shape=rgb_shape, trainable=True)
+    md = vgg16convs_vertex_pred(shape=rgb_shape, trainable=True)   # trainable=False
 
     num_classes = 3 # including the background as '0'
 
@@ -831,7 +877,26 @@ if __name__ == "__main__":
     # total_loss = mdw.smooth_l1_loss_vertex(ytrue, mdw.vertex_pred)
     # total_loss = md.smooth_l1_loss_vertex(md.layers[-1], vertex_targets, vertex_weights)
     total_loss = loss_cls + loss_vertex
-    optimizer = tf.train.MomentumOptimizer(0.0001, 0.9).minimize(total_loss)
+    # optimizer = tf.train.MomentumOptimizer(0.0001, 0.9).minimize(total_loss)
+    optimizer = tf.train.MomentumOptimizer(0.001, 0.9).minimize(total_loss)
+
+
+    def unpad_im_tensor(im, factor):
+        '''
+            adapt from PCNN, applied to tensor
+        '''
+        # print('up im tensor im shape type =',im.get_shape(), type(im.get_shape()))
+        height = im.get_shape().as_list()[1]  #im.shape[0]
+        width = im.get_shape().as_list()[2] # im.shape[1]
+
+        pad_height = int(np.ceil(height / float(factor)) * factor - height)
+        pad_width = int(np.ceil(width / float(factor)) * factor - width)
+
+        if len(im.shape) == 3:
+            return im[0:height-pad_height, 0:width-pad_width, :]
+        elif len(im.shape) == 2:
+            return im[0:height-pad_height, 0:width-pad_width]
+
 
     ########### tensorboard reports
     with tf.name_scope('summaries'):
@@ -840,7 +905,18 @@ if __name__ == "__main__":
         tf.summary.scalar('loss_vertex', loss_vertex)
         tf.summary.image('rgb_input', md.input)
         tf.summary.image('prob', scores)
-        tf.summary.image('label_2d', tf.expand_dims(tf.cast(md.layer_dict['label_2d'], tf.uint8), 3) )
+    
+        labels = md.layer_dict['label_2d']
+        tf.summary.scalar('label_2d_sum_abs', tf.reduce_sum(tf.abs(labels)))
+        labels_up = unpad_im_tensor(labels, 16)
+        im_label = labels_to_image_tensor(labels_up)
+        tf.summary.image('label_2d', tf.expand_dims(tf.cast(im_label, tf.uint8), 3))
+
+        # tf.summary.image('label_2d', tf.expand_dims(tf.cast(md.layer_dict['label_2d'], tf.uint8), 3) )
+
+        # labels = unpad_im(labels, 16)
+        # im_label = labels_to_image(labels)
+
 
     merged = tf.summary.merge_all()
     writer = tf.summary.FileWriter('.')
@@ -911,7 +987,7 @@ if __name__ == "__main__":
                 # labels = unpad_im(labels, 16)
                 # im_label = labels_to_image(labels)
                 # cv2.imshow("im_label", im_label)
-                # cv2.waitKey(1)
+                # cv2.waitKey(0)
 
                 writer.add_summary(summary, epoch)
 
