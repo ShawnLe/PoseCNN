@@ -1,8 +1,8 @@
 {
-"num_images": 1500,
+"num_images": 5000,
 "num_keypoints": 9,
-"sel_random_points": false,
-"random_background": false,
+"sel_random_points": true,
+"random_background": true,
 "syn_merges_real": true,
 "check_whole_bb": false,
 "background_id": 10,
@@ -22,7 +22,7 @@
             "duck": [0.093609, 0.071429, 0.072279],
             "almond": [0.151818, 0.061151, 0.089383]
 },
-"selectModelPointsFromFile" : true,
+"selectModelPointsFromFile" : false,
 "num_instances": [2, 2],
 "factor_depth": 10000.0
 }

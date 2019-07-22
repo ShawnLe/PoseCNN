@@ -22,6 +22,8 @@ import numpy as np
 import numpy.random as npr
 from numpy import linalg as LA
 
+from test_synthesis_4Y2 import selectModelPoints, checkVisibility
+
 import scipy.io
 import cv2
 import numpy as np
