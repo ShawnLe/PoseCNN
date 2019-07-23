@@ -270,12 +270,15 @@ def labels_to_image_tensor(labels):
 class vgg16convs_vertex_pred():
 
     # def __init__(self, input):
-    def __init__(self, shape=(None,None,None), trainable=True):
+    def __init__(self, shape=(None,None,None), backbone_trainable=True, head_trainable=True, conv4_trainable=False, conv5_trainable=False):
 
         # self.input = tf.placeholder(tf.float32, shape=[None, None, None, 3])
         self.input = tf.placeholder(tf.float32, shape=[None, shape[0], shape[1], shape[2]])
         self.gt_label_2d = tf.placeholder(tf.int32, shape=[None, None, None])
-        self.trainable = trainable
+        self.backbone_trainable = backbone_trainable
+        self.head_trainable = head_trainable
+        self.conv4_trainable = conv4_trainable
+        self.conv5_trainable = conv5_trainable
         self.num_units = 64
         self.keep_prob_queue = 0.5 #1. 
         self.threshold_label = .5
@@ -330,6 +333,39 @@ class vgg16convs_vertex_pred():
             tf.summary.image('prob_normalized_1', tensor_img)
             tensor_img = self.make_tensor_img(tf.slice(self.layer_dict['prob_normalized'], [0,0,0,2], [1, shape[1], shape[2], 1]))
             tf.summary.image('prob_normalized_2', tensor_img)
+
+            # shape = self.layer_dict['upscore'].shape
+            # for i in range(shape[3]):
+            #     tensor_img = self.make_tensor_img(tf.slice(self.layer_dict['upscore'], [0,0,0,0], [1, shape[1], shape[2], 1]))
+            #     tf.summary.image('upscore', tensor_img)
+
+            # shape = self.layer_dict['prob'].shape
+            # for i in range(shape[3]):
+            #     tensor_img = self.make_tensor_img(tf.slice(self.layer_dict['prob'], [0,0,0,0], [1, shape[1], shape[2], 1]))
+            #     tf.summary.image('prob', tensor_img)
+
+            shape = self.layer_dict['score'].shape
+            tensor_img = self.make_tensor_img(tf.slice(self.layer_dict['score'], [0,0,0,0], [1, shape[1], shape[2], 1]))
+            tf.summary.image('score0', tensor_img)
+            tensor_img = self.make_tensor_img(tf.slice(self.layer_dict['score'], [0,0,0,1], [1, shape[1], shape[2], 1]))
+            tf.summary.image('score1', tensor_img)
+            tensor_img = self.make_tensor_img(tf.slice(self.layer_dict['score'], [0,0,0,2], [1, shape[1], shape[2], 1]))
+            tf.summary.image('score2', tensor_img)
+
+            shape = self.layer_dict['score_conv4'].shape
+            for i in range(shape[3]):
+                tensor_img = (tf.slice(self.layer_dict['score_conv4'], [0,0,0,0], [1, shape[1], shape[2], 1]))
+                tf.summary.image('score_conv4', tensor_img)
+
+            # shape = self.layer_dict['score_conv5'].shape
+            # for i in range(shape[3]):
+            #     tensor_img = tf.slice(self.layer_dict['score_conv5'], [0,0,0,i], [1, shape[1], shape[2], 1])
+            #     tf.summary.image('score_conv5', tensor_img)
+
+            # shape = self.layer_dict['upscore_conv5'].shape
+            # for i in range(shape[3]):
+            #     tensor_img = self.make_tensor_img(tf.slice(self.layer_dict['upscore_conv5'], [0,0,0,i], [1, shape[1], shape[2], 1]))
+            #     tf.summary.image('upscore_conv5', tensor_img)
 
             tensor_img = self.make_tensor_img(tf.slice(self.layer_dict['vertex_pred'], [0,0,0,4], [1, shape[1], shape[2], 1]))
             tf.summary.image('vertex_pred', tensor_img)
@@ -485,25 +521,25 @@ class vgg16convs_vertex_pred():
 
     def build(self):
 
-        conv1_1 = conv(self.input, 3, 3, 64, 1, 1, name='conv1_1', c_i=3, trainable=self.trainable)
-        conv1_2 = conv(conv1_1, 3, 3, 64, 1, 1, name='conv1_2', c_i=64, trainable=self.trainable)
+        conv1_1 = conv(self.input, 3, 3, 64, 1, 1, name='conv1_1', c_i=3, trainable=self.backbone_trainable)
+        conv1_2 = conv(conv1_1, 3, 3, 64, 1, 1, name='conv1_2', c_i=64, trainable=self.backbone_trainable)
         pool1 = max_pool(conv1_2, 2, 2, 2, 2, name='pool1')
         self.layers.append([conv1_1, conv1_2, pool1])
         self.layer_dict['conv1_1'] = conv1_1
         self.layer_dict['conv1_2'] = conv1_2
         self.layer_dict['pool1'] = pool1
 
-        conv2_1 = conv(pool1, 3, 3, 128, 1, 1, name='conv2_1', c_i=64, trainable=self.trainable)
-        conv2_2 = conv(conv2_1, 3, 3, 128, 1, 1, name='conv2_2', c_i=128, trainable=self.trainable)
+        conv2_1 = conv(pool1, 3, 3, 128, 1, 1, name='conv2_1', c_i=64, trainable=self.backbone_trainable)
+        conv2_2 = conv(conv2_1, 3, 3, 128, 1, 1, name='conv2_2', c_i=128, trainable=self.backbone_trainable)
         pool2 = max_pool(conv2_2, 2, 2, 2, 2, name='pool2')
         self.layers.append([conv2_1, conv2_2, pool2])
         self.layer_dict['conv2_1'] = conv2_1
         self.layer_dict['conv2_2'] = conv2_2
         self.layer_dict['pool2'] = pool2
 
-        conv3_1 = conv(pool2, 3, 3, 256, 1, 1, name='conv3_1', c_i=128, trainable=self.trainable)
-        conv3_2 = conv(conv3_1, 3, 3, 256, 1, 1, name='conv3_2', c_i=256, trainable=self.trainable)
-        conv3_3 = conv(conv3_2, 3, 3, 256, 1, 1, name='conv3_3', c_i=256, trainable=self.trainable)
+        conv3_1 = conv(pool2, 3, 3, 256, 1, 1, name='conv3_1', c_i=128, trainable=self.backbone_trainable)
+        conv3_2 = conv(conv3_1, 3, 3, 256, 1, 1, name='conv3_2', c_i=256, trainable=self.backbone_trainable)
+        conv3_3 = conv(conv3_2, 3, 3, 256, 1, 1, name='conv3_3', c_i=256, trainable=self.backbone_trainable)
         pool3 = max_pool(conv3_3, 2, 2, 2, 2, name='pool3')
         self.layers.append([conv3_1, conv3_2, conv3_3, pool3])
         self.layer_dict['conv3_1'] = conv3_1
@@ -511,9 +547,9 @@ class vgg16convs_vertex_pred():
         self.layer_dict['conv3_3'] = conv3_3
         self.layer_dict['pool3'] = pool3
 
-        conv4_1 = conv(pool3, 3, 3, 512, 1, 1, name='conv4_1', c_i=256, trainable=self.trainable)
-        conv4_2 = conv(conv4_1, 3, 3, 512, 1, 1, name='conv4_2', c_i=512, trainable=self.trainable)
-        conv4_3 = conv(conv4_2, 3, 3, 512, 1, 1, name='conv4_3', c_i=512, trainable=self.trainable)
+        conv4_1 = conv(pool3, 3, 3, 512, 1, 1, name='conv4_1', c_i=256, trainable=self.conv4_trainable)
+        conv4_2 = conv(conv4_1, 3, 3, 512, 1, 1, name='conv4_2', c_i=512, trainable=self.conv4_trainable)
+        conv4_3 = conv(conv4_2, 3, 3, 512, 1, 1, name='conv4_3', c_i=512, trainable=self.conv4_trainable)
         pool4 = max_pool(conv4_3, 2, 2, 2, 2, name='pool4')
         self.layers.append([conv4_1, conv4_2, conv4_3, pool4])
         self.layer_dict['conv4_1'] = conv4_1
@@ -521,32 +557,32 @@ class vgg16convs_vertex_pred():
         self.layer_dict['conv4_3'] = conv4_3
         self.layer_dict['pool4'] = pool4
 
-        conv5_1 = conv(pool4, 3, 3, 512, 1, 1, name='conv5_1', c_i=512, trainable=self.trainable)
-        conv5_2 = conv(conv5_1, 3, 3, 512, 1, 1, name='conv5_2', c_i=512, trainable=self.trainable)
-        conv5_3 = conv(conv5_2, 3, 3, 512, 1, 1, name='conv5_3', c_i=512, trainable=self.trainable)
+        conv5_1 = conv(pool4, 3, 3, 512, 1, 1, name='conv5_1', c_i=512, trainable=self.conv5_trainable)
+        conv5_2 = conv(conv5_1, 3, 3, 512, 1, 1, name='conv5_2', c_i=512, trainable=self.conv5_trainable)
+        conv5_3 = conv(conv5_2, 3, 3, 512, 1, 1, name='conv5_3', c_i=512, trainable=self.conv5_trainable)
         self.layers.append([conv5_1, conv5_2, conv5_3])
         self.layer_dict['conv5_1'] = conv5_1
         self.layer_dict['conv5_2'] = conv5_2
         self.layer_dict['conv5_3'] = conv5_3
 
-        score_conv5 = conv(conv5_3, 1, 1, self.num_units, 1, 1, name='score_conv5', c_i=512)
-        upscore_conv5 = deconv(score_conv5, 4, 4, self.num_units, 2, 2, name='upscore_conv5', trainable=False)
+        score_conv5 = conv(conv5_3, 1, 1, self.num_units, 1, 1, name='score_conv5', c_i=512, trainable=True)
+        upscore_conv5 = deconv(score_conv5, 4, 4, self.num_units, 2, 2, name='upscore_conv5', trainable=True)
         self.layers.append([score_conv5, upscore_conv5])
         self.layer_dict['score_conv5'] = score_conv5
         self.layer_dict['upscore_conv5'] = upscore_conv5
 
-        score_conv4 = conv(conv4_3, 1, 1, self.num_units, 1, 1, name='score_conv4', c_i=512)
+        score_conv4 = conv(conv4_3, 1, 1, self.num_units, 1, 1, name='score_conv4', c_i=512, trainable=True)
         self.layer_dict['score_conv4'] = score_conv4
 
         add_score = add([score_conv4, upscore_conv5], name='add_score')
         dropout_ = dropout(add_score, self.keep_prob_queue, name='dropout')
-        upscore = deconv(dropout_, int(16*self.scale), int(16*self.scale), self.num_units, int(8*self.scale), int(8*self.scale), name='upscore', trainable=False)
+        upscore = deconv(dropout_, int(16*self.scale), int(16*self.scale), self.num_units, int(8*self.scale), int(8*self.scale), name='upscore', trainable=True)
         self.layers.append([score_conv4, add_score, dropout_, upscore])
         self.layer_dict['add_score'] = add_score
         self.layer_dict['dropout'] = dropout_
         self.layer_dict['upscore'] = upscore
 
-        score = conv(upscore, 1, 1, self.num_classes, 1, 1, name='score', c_i=self.num_units)
+        score = conv(upscore, 1, 1, self.num_classes, 1, 1, name='score', c_i=self.num_units, trainable=True)
         prob = log_softmax_high_dimension(score, self.num_classes, name='prob')
         self.layer_dict['prob'] = prob
         self.layer_dict['score'] = score
@@ -560,12 +596,12 @@ class vgg16convs_vertex_pred():
         self.layer_dict['gt_label_weight'] = gt_label_weight
 
         if self.vertex_reg : 
-            score_conv5_vertex = conv(conv5_3, 1, 1, 128, 1, 1, name='score_conv5_vertex', relu=False, c_i=512)
+            score_conv5_vertex = conv(conv5_3, 1, 1, 128, 1, 1, name='score_conv5_vertex', relu=False, c_i=512, trainable=True)
             upscore_conv5_vertex = deconv(score_conv5_vertex, 4, 4, 128, 2, 2, name='upscore_conv5_vertex', trainable=True)
             self.layers.append([score_conv5_vertex, upscore_conv5_vertex])
             self.layer_dict['score_conv5_vertex'] = score_conv5_vertex
 
-            score_conv4_vertex = conv(conv4_3, 1, 1, 128, 1, 1, name='score_conv4_vertex', relu=False, c_i=512)
+            score_conv4_vertex = conv(conv4_3, 1, 1, 128, 1, 1, name='score_conv4_vertex', relu=False, c_i=512, trainable=True)
             self.layers.append(score_conv4_vertex)
             self.layer_dict['score_conv4_vertex'] = score_conv4_vertex
 
@@ -589,7 +625,7 @@ class vgg16convs_vertex_pred():
             # self.layer_dict['upscore_vertex_conv'] = upscore_vertex_conv
             # self.layer_dict['upscore_vertex_conv1'] = upscore_vertex_conv1
 
-            vertex_pred = conv(upscore_vertex, 1, 1, 3 * self.num_classes, 1, 1, name='vertex_pred', relu=False, c_i=128)
+            vertex_pred = conv(upscore_vertex, 1, 1, 3 * self.num_classes, 1, 1, name='vertex_pred', relu=False, c_i=128, trainable=True)
             # vertex_pred = conv(upscore_vertex2, 1, 1, 3 * self.num_classes, 1, 1, name='vertex_pred', relu=False, c_i=128)
             self.output = vertex_pred
             self.layers.append(self.output)
@@ -841,7 +877,7 @@ if __name__ == "__main__":
     mode = 'train'    # 'test' # 
 
     rgb_shape = (480, 640, 3)
-    md = vgg16convs_vertex_pred(shape=rgb_shape, trainable=True)   # trainable=False
+    md = vgg16convs_vertex_pred(shape=rgb_shape, backbone_trainable=False, head_trainable=True)   # trainable=False
 
     num_classes = 3 # including the background as '0'
 
