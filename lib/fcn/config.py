@@ -23,6 +23,16 @@ import math
 # `pip install easydict` if you don't have it
 from easydict import EasyDict as edict
 
+# vertex pred configs -- start
+IM_SIZE = (480, 640, 3)
+SCALE_FACTOR = 0.5
+IM_SIZE_SCALE = (int(IM_SIZE[0] * SCALE_FACTOR), int(IM_SIZE[1] * SCALE_FACTOR), 3) 
+LEARNING_RATE = 0.0001 # 0.001
+MOMENTUM = 0.9
+EPOCH = 10000
+
+# vertex pred configs -- end
+
 __C = edict()
 # Consumers can get config by:
 #   from fast_rcnn_config import cfg

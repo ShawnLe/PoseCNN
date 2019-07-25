@@ -20,3 +20,6 @@ lib/*/build*
 lib/*/.vscode/*
 lib/.vscode/*
 events*
+output/*/*/*
+output/*
+output/*/*
